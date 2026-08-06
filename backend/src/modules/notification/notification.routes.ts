@@ -51,11 +51,31 @@ const sendSchoolNotificationValidation = [
     .withMessage('Data must be an object'),
 ];
 
+const incidentReportValidation = [
+  body('tripId')
+    .notEmpty()
+    .withMessage('Trip ID is required')
+    .isUUID()
+    .withMessage('Invalid trip ID'),
+  body('type')
+    .notEmpty()
+    .withMessage('Type is required')
+    .isIn(['DELAY', 'BREAKDOWN'])
+    .withMessage('Type must be DELAY or BREAKDOWN'),
+  body('details')
+    .optional()
+    .isString()
+    .withMessage('Details must be a string')
+    .isLength({ max: 500 })
+    .withMessage('Details too long'),
+];
+
 // Routes
 router.get('/', authenticate, notificationController.getNotifications);
 router.put('/:id/read', authenticate, notificationController.markAsRead);
 router.put('/read-all', authenticate, notificationController.markAllAsRead);
 router.post('/send', authenticate, authorize('ADMIN'), validate(sendNotificationValidation), notificationController.sendNotification);
 router.post('/school', authenticate, authorize('ADMIN'), validate(sendSchoolNotificationValidation), notificationController.sendSchoolNotification);
+router.post('/incident-report', authenticate, authorize('DRIVER'), validate(incidentReportValidation), notificationController.reportIncident);
 
 export default router;

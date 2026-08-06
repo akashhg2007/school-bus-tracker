@@ -97,4 +97,34 @@ export const handleEmergency = (socket: Socket) => {
       socket.emit('error', { message: error.message || 'Failed to trigger emergency' });
     }
   });
+
+  socket.on('parent:emergency', async (data) => {
+    try {
+      const token = socket.handshake.auth.token;
+      if (!token) {
+        socket.emit('error', { message: 'Authentication required' });
+        return;
+      }
+
+      const decoded = verifyToken(token) as AuthPayload;
+      if (decoded.userType !== 'PARENT') {
+        socket.emit('error', { message: 'Only parents can trigger emergency' });
+        return;
+      }
+
+      const { studentName, message } = data;
+
+      socket.to(`school:${decoded.schoolId}`).emit('fleet:emergency-alert', {
+        parentId: decoded.userId,
+        studentName: studentName || 'a student',
+        message: message || 'Emergency triggered by a parent',
+        timestamp: new Date(),
+      });
+
+      socket.emit('emergency:acknowledged', { timestamp: new Date() });
+    } catch (error: any) {
+      console.error('Parent emergency error:', error);
+      socket.emit('error', { message: error.message || 'Failed to trigger emergency' });
+    }
+  });
 };

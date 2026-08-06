@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import api from '../services/api';
+import api, { unwrapList } from '../services/api';
 
 interface Trip {
   id: string;
@@ -24,7 +24,7 @@ const TripHistory: React.FC = () => {
   const loadTrips = async () => {
     try {
       const response = await api.get('/trips/history', { params: { page, limit: 20 } });
-      const data = response.data?.data || [];
+      const data = unwrapList(response.data);
       if (page === 1) {
         setTrips(data);
       } else {

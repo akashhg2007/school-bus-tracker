@@ -1,6 +1,7 @@
 import prisma from '../../config/database';
 import { NotFoundError, BadRequestError } from '../../utils/errors';
-import { emitToRoom } from '../../config/socket';
+import { emitToRoom } from '../../socket';
+import { sendNotification } from '../notification/notification.service';
 
 interface MarkAttendanceInput {
   studentId: string;
@@ -60,6 +61,35 @@ export const markAttendance = async (data: MarkAttendanceInput) => {
     tripType: trip.type,
     type: data.type,
   });
+
+  // Notify the parent in-app
+  try {
+    const isEvening = trip.type === 'EVENING';
+    const title =
+      data.type === 'BOARDING'
+        ? isEvening
+          ? 'Boarded for return trip'
+          : 'Student boarded the bus'
+        : isEvening
+          ? 'Reached home stop'
+          : 'Reached school';
+    const body = `${student.name} ${data.type === 'BOARDING' ? 'boarded' : 'reached'} ${trip.bus.busNumber} ${isEvening ? 'return' : 'morning'} trip.`;
+    await sendNotification({
+      userId: student.parentId,
+      userType: 'PARENT',
+      title,
+      body,
+      data: {
+        event: data.type === 'BOARDING' ? 'student-boarded' : 'student-reached',
+        studentId: student.id,
+        busId: trip.bus.id,
+        busNumber: trip.bus.busNumber,
+        tripType: trip.type,
+      },
+    });
+  } catch (error) {
+    console.error('Failed to notify parent of attendance:', error);
+  }
 
   return attendance;
 };
@@ -144,4 +174,31 @@ export const getParentAttendance = async (parentId: string, studentId: string) =
     orderBy: { createdAt: 'desc' },
     take: 30,
   });
+};
+
+export const getAttendanceHistory = async (schoolId: string, page: number = 1, limit: number = 20) => {
+  const skip = (page - 1) * limit;
+  const where = { trip: { bus: { schoolId } } };
+
+  const [attendance, total] = await Promise.all([
+    prisma.attendance.findMany({
+      where,
+      include: {
+        student: { select: { id: true, name: true, rollNumber: true } },
+        trip: {
+          select: {
+            id: true,
+            type: true,
+            bus: { select: { id: true, busNumber: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take: limit,
+    }),
+    prisma.attendance.count({ where }),
+  ]);
+
+  return { attendance, total, page, limit };
 };

@@ -1,5 +1,6 @@
 import prisma from '../../config/database';
-import { emitToRoom } from '../../config/socket';
+import { emitToRoom } from '../../socket';
+import { NotFoundError } from '../../utils/errors';
 
 interface SendNotificationInput {
   userId: string;
@@ -95,4 +96,27 @@ export const markAllAsRead = async (userId: string, userType: string) => {
     data: { isRead: 1 },
   });
   return { message: 'All notifications marked as read' };
+};
+
+export const sendIncidentReport = async (schoolId: string, tripId: string, type: 'DELAY' | 'BREAKDOWN', details?: string) => {
+  const trip = await prisma.trip.findUnique({
+    where: { id: tripId },
+    include: { bus: { select: { busNumber: true } } },
+  });
+
+  if (!trip) {
+    throw new NotFoundError('Trip not found');
+  }
+
+  const admins = await prisma.admin.findMany({ where: { schoolId }, select: { id: true } });
+  const busNumber = trip.bus.busNumber;
+  const title = type === 'BREAKDOWN' ? 'Bus breakdown reported' : 'Bus delay reported';
+  const body = `Bus ${busNumber} ${type === 'BREAKDOWN' ? 'has a breakdown' : 'is running late'}. ${details || ''}`.trim();
+
+  return sendBulkNotification(
+    admins.map((a) => ({ userId: a.id, userType: 'ADMIN' as const })),
+    title,
+    body,
+    { tripId, type, busNumber }
+  );
 };

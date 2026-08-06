@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import api from '../services/api';
+import api, { unwrapList } from '../services/api';
 
 interface Stop {
   id: string;
@@ -34,7 +34,7 @@ const RouteManagement: React.FC = () => {
   const loadRoutes = async () => {
     try {
       const response = await api.get('/routes');
-      setRoutes(response.data?.data || []);
+      setRoutes(unwrapList(response.data));
     } catch (error) {
       console.error('Error loading routes:', error);
     }

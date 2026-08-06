@@ -1,6 +1,22 @@
 import prisma from '../../config/database';
 import { NotFoundError, BadRequestError } from '../../utils/errors';
-import { emitToRoom } from '../../config/socket';
+import { emitToRoom } from '../../socket';
+import { sendNotification } from '../notification/notification.service';
+
+const notifyBusParents = async (busId: string, title: string, body: string, data?: Record<string, any>) => {
+  try {
+    const students = await prisma.student.findMany({
+      where: { busId },
+      select: { parentId: true },
+    });
+    const parentIds = [...new Set(students.map((s) => s.parentId))];
+    for (const parentId of parentIds) {
+      await sendNotification({ userId: parentId, userType: 'PARENT', title, body, data });
+    }
+  } catch (error) {
+    console.error('Failed to notify bus parents:', error);
+  }
+};
 
 interface StartTripInput {
   busId: string;
@@ -73,6 +89,16 @@ export const startTrip = async (data: StartTripInput) => {
     type: data.type,
   });
 
+  // Notify parents in-app (FCM push comes separately)
+  const startedTitle = data.type === 'EVENING' ? 'Return trip started' : 'Bus has started';
+  const startedBody = `${bus.busNumber} ${data.type === 'EVENING' ? 'return' : 'morning'} trip has started. Driver: ${driver.name}`;
+  await notifyBusParents(bus.id, startedTitle, startedBody, {
+    event: data.type === 'EVENING' ? 'return-trip-started' : 'trip-started',
+    busId: bus.id,
+    busNumber: bus.busNumber,
+    type: data.type,
+  });
+
   return trip;
 };
 
@@ -111,6 +137,13 @@ export const endTrip = async (tripId: string) => {
     busId: trip.bus.id,
     busNumber: trip.bus.busNumber,
     driverName: trip.driver.name,
+    type: trip.type,
+  });
+
+  await notifyBusParents(trip.bus.id, 'Trip completed', `${trip.bus.busNumber} trip has ended.`, {
+    event: 'trip-ended',
+    busId: trip.bus.id,
+    busNumber: trip.bus.busNumber,
     type: trip.type,
   });
 

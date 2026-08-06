@@ -4,9 +4,13 @@ import 'package:latlong2/latlong.dart';
 import '../../core/config/theme.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/auth_service.dart';
+import '../../core/services/socket_service.dart';
 import '../../shared/map/osm_map_widget.dart';
 import '../../shared/screens/login_screen.dart';
 import 'bus_tracking_screen.dart';
+import 'route_screen.dart';
+import 'leave_request_screen.dart';
+import 'announcements_screen.dart';
 import 'notifications_screen.dart';
 
 class ParentHomeScreen extends StatefulWidget {
@@ -43,6 +47,30 @@ class _ParentHomeScreenState extends State<ParentHomeScreen> {
     } catch (e) {
       setState(() => _loading = false);
     }
+  }
+
+  Future<void> _triggerEmergency() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Trigger emergency?'),
+        content: const Text('This will alert the school transport office immediately.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Send Alert', style: TextStyle(color: AppColors.dangerRed))),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final socket = SocketService();
+    socket.connect();
+    socket.triggerParentEmergency(
+      studentName: _children.isNotEmpty ? _children.first['name']?.toString() : null,
+    );
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Emergency alert sent to school')),
+    );
   }
 
   @override
@@ -124,7 +152,22 @@ class _ParentHomeScreenState extends State<ParentHomeScreen> {
               })),
               const SizedBox(width: 12),
               Expanded(child: _buildActionCard(icon: Icons.route, title: 'View Route', color: AppColors.safeGreen, onTap: () => setState(() => _currentIndex = 1))),
+              const SizedBox(width: 12),
+              Expanded(child: _buildActionCard(icon: Icons.event_busy, title: 'Leave', color: AppColors.dangerRed, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const LeaveRequestScreen())))),
             ],
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () => _triggerEmergency(),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.dangerRed,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+              icon: const Icon(Icons.warning_amber, color: AppColors.white),
+              label: const Text('EMERGENCY', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
           ),
           const SizedBox(height: 16),
           const Text('My Children', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.dark)),
@@ -152,16 +195,15 @@ class _ParentHomeScreenState extends State<ParentHomeScreen> {
   }
 
   Widget _buildRouteTab() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.route, size: 80, color: AppColors.medium.withOpacity(0.5)),
-          const SizedBox(height: 16),
-          const Text('Route Information', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.dark)),
-        ],
-      ),
-    );
+    Map<String, dynamic>? bus;
+    if (_children.isNotEmpty) {
+      final child = _children.first;
+      bus = child['bus'];
+    }
+    if (bus == null) {
+      return const Center(child: Text('No bus assigned to your children'));
+    }
+    return RouteView(busId: bus['id'], busNumber: bus['busNumber']);
   }
 
   Widget _buildProfileTab() {
@@ -176,6 +218,8 @@ class _ParentHomeScreenState extends State<ParentHomeScreen> {
           Text(auth.userName ?? 'Parent', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.dark)),
           const SizedBox(height: 32),
           _buildProfileMenuItem(icon: Icons.child_care, title: 'My Children', onTap: () {}),
+          _buildProfileMenuItem(icon: Icons.event_busy, title: 'Leave Requests', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const LeaveRequestScreen()))),
+          _buildProfileMenuItem(icon: Icons.campaign, title: 'Announcements', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const AnnouncementsScreen()))),
           _buildProfileMenuItem(icon: Icons.notifications, title: 'Notifications', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const NotificationsScreen()))),
           _buildProfileMenuItem(icon: Icons.logout, title: 'Logout', color: AppColors.dangerRed, onTap: () {
             auth.logout();

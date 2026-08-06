@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import api from '../services/api';
+import api, { unwrapList } from '../services/api';
 
 interface Driver {
   id: string;
@@ -30,7 +30,7 @@ const DriverManagement: React.FC = () => {
   const loadDrivers = async () => {
     try {
       const response = await api.get('/drivers');
-      setDrivers(response.data?.data || []);
+      setDrivers(unwrapList(response.data));
     } catch (error) {
       console.error('Error loading drivers:', error);
     }

@@ -170,4 +170,23 @@ class ApiService {
   Future<Response> sendFcmToken(String fcmToken) {
     return dio.post('/auth/fcm-token', data: {'fcmToken': fcmToken});
   }
+
+  // Leave request endpoints
+  Future<Response> createLeaveRequest(String studentId, String date, {String reason = ''}) {
+    return dio.post('/leaves', data: {'studentId': studentId, 'date': date, 'reason': reason});
+  }
+
+  Future<Response> getMyLeaveRequests() {
+    return dio.get('/leaves');
+  }
+
+  // Incident report (drivers)
+  Future<Response> reportIncident(String tripId, String type, {String details = ''}) {
+    return dio.post('/notifications/incident-report', data: {'tripId': tripId, 'type': type, 'details': details});
+  }
+
+  // Announcement endpoints
+  Future<Response> getAnnouncements({int page = 1, int limit = 20}) {
+    return dio.get('/announcements', queryParameters: {'page': page, 'limit': limit});
+  }
 }

@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import api from '../services/api';
+import api, { unwrapList } from '../services/api';
 
 interface Attendance {
   id: string;
   type: string;
-  timestamp: string;
+  createdAt: string;
   student?: { name: string };
   trip?: { bus?: { busNumber: string }; type: string };
 }
@@ -22,7 +22,7 @@ const AttendanceReports: React.FC = () => {
   const loadAttendance = async () => {
     try {
       const response = await api.get('/attendance', { params: { page, limit: 20 } });
-      const data = response.data?.data || [];
+      const data = unwrapList(response.data);
       if (page === 1) {
         setAttendance(data);
       } else {
@@ -81,7 +81,7 @@ const AttendanceReports: React.FC = () => {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">{record.trip?.bus?.busNumber || 'N/A'}</td>
                 <td className="px-6 py-4 whitespace-nowrap">{record.trip?.type || 'N/A'}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm">{formatDate(record.timestamp)}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm">{formatDate(record.createdAt)}</td>
               </tr>
             ))}
           </tbody>

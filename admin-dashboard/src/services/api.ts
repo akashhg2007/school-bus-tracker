@@ -34,4 +34,18 @@ api.interceptors.response.use(
   }
 );
 
+// Backend list endpoints return `{ success, message, data: { <items>, total, page, limit } }`.
+// This helper extracts the actual array regardless of the payload shape.
+export const unwrapList = (payload: any): any[] => {
+  const data = payload?.data ?? payload;
+  if (Array.isArray(data)) return data;
+  if (data && typeof data === 'object') {
+    const KEYS = ['buses', 'students', 'drivers', 'routes', 'notifications', 'trips', 'stops', 'attendance', 'leaves', 'announcements'];
+    for (const key of KEYS) {
+      if (Array.isArray(data[key])) return data[key];
+    }
+  }
+  return Array.isArray(payload) ? payload : [];
+};
+
 export default api;

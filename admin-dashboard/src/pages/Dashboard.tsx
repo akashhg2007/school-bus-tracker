@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useAuth } from '../context/AuthContext';
-import api from '../services/api';
+import api, { unwrapList } from '../services/api';
 
 interface DashboardStats {
   totalBuses: number;
@@ -36,12 +37,21 @@ const Dashboard: React.FC = () => {
         api.get('/students').catch(() => ({ data: { data: [] } })),
       ]);
 
-      const buses = busesRes.data?.data || [];
-      const trips = tripsRes.data?.data || [];
-      const students = studentsRes.data?.data || [];
+      const buses = unwrapList(busesRes.data);
+      const trips = unwrapList(tripsRes.data);
+      const students = unwrapList(studentsRes.data);
 
-      const activeBuses = buses.filter((b: any) => b.status === 'ACTIVE' || b.currentTripId).length;
-      const studentsOnboard = trips.reduce((sum: number, t: any) => sum + (t.studentsOnboard || 0), 0);
+      const activeBuses = buses.filter((b: any) => b.isActive).length;
+      const studentsOnboard = trips.reduce((sum: number, t: any) => sum + (t._count?.attendance || 0), 0);
+
+      // A bus is "delayed" if its active trip has no GPS update in the last 5 minutes
+      const STALE_MS = 5 * 60 * 1000;
+      const now = Date.now();
+      const delayedTrips = trips.filter((t: any) => {
+        const lastLoc = t.gpsLocations?.[0]?.createdAt;
+        if (!lastLoc) return true;
+        return now - new Date(lastLoc).getTime() > STALE_MS;
+      });
 
       setStats({
         totalBuses: buses.length,
@@ -49,7 +59,7 @@ const Dashboard: React.FC = () => {
         totalStudents: students.length,
         studentsOnboard: studentsOnboard,
         activeTrips: trips.length,
-        delayedBuses: 0,
+        delayedBuses: delayedTrips.length,
       });
 
       setActiveTrips(trips.slice(0, 5));
@@ -149,6 +159,20 @@ const Dashboard: React.FC = () => {
         <div className="bg-white rounded-lg shadow p-6">
           <div className="flex items-center justify-between">
             <div>
+              <p className="text-sm text-gray-500">Students Onboard</p>
+              <p className="text-3xl font-bold text-orange-600">{stats.studentsOnboard}</p>
+            </div>
+            <div className="p-3 bg-orange-100 rounded-full">
+              <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center justify-between">
+            <div>
               <p className="text-sm text-gray-500">Active Trips</p>
               <p className="text-3xl font-bold text-red-600">{stats.activeTrips}</p>
             </div>
@@ -158,6 +182,44 @@ const Dashboard: React.FC = () => {
               </svg>
             </div>
           </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-500">Delayed Buses</p>
+              <p className={`text-3xl font-bold ${stats.delayedBuses > 0 ? 'text-red-600' : 'text-green-600'}`}>{stats.delayedBuses}</p>
+            </div>
+            <div className={`p-3 rounded-full ${stats.delayedBuses > 0 ? 'bg-red-100' : 'bg-green-100'}`}>
+              <svg className={`w-6 h-6 ${stats.delayedBuses > 0 ? 'text-red-600' : 'text-green-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-lg shadow">
+        <div className="p-6 border-b border-gray-200">
+          <h2 className="text-lg font-semibold text-gray-800">Fleet Overview</h2>
+        </div>
+        <div className="p-6">
+          <ResponsiveContainer width="100%" height={280}>
+            <BarChart data={[
+              { name: 'Buses', value: stats.totalBuses, fill: '#3b82f6' },
+              { name: 'Active Buses', value: stats.activeBuses, fill: '#22c55e' },
+              { name: 'Students', value: stats.totalStudents, fill: '#f97316' },
+              { name: 'Onboard', value: stats.studentsOnboard, fill: '#a855f7' },
+              { name: 'Active Trips', value: stats.activeTrips, fill: '#ef4444' },
+              { name: 'Delayed', value: stats.delayedBuses, fill: '#eab308' },
+            ]}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="name" />
+              <YAxis allowDecimals={false} />
+              <Tooltip />
+              <Bar dataKey="value" radius={[6, 6, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
         </div>
       </div>
 

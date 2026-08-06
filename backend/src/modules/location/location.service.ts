@@ -1,7 +1,8 @@
 import prisma from '../../config/database';
 import { NotFoundError } from '../../utils/errors';
-import { emitToRoom } from '../../config/socket';
+import { emitToRoom } from '../../socket';
 import { calculateDistance, calculateETA, findNearestStop } from '../../utils/distance';
+import { sendNotification } from '../notification/notification.service';
 
 interface LocationUpdate {
   latitude: number;
@@ -123,6 +124,37 @@ export const updateLocation = async (tripId: string, location: LocationUpdate) =
         eta: etaMinutes,
         busNumber: trip.bus.busNumber,
       });
+
+      // In-app alert with dedupe (one per student/stop within 10 minutes)
+      try {
+        const recent = await prisma.notification.findFirst({
+          where: {
+            userId: student.parentId,
+            userType: 'PARENT',
+            data: {
+              contains: `"event":"approaching-stop"`,
+            },
+            createdAt: { gte: new Date(Date.now() - 10 * 60 * 1000) },
+          },
+          orderBy: { createdAt: 'desc' },
+        });
+        if (recent && recent.data && recent.data.includes(`"stopId":"${nextStop.id}"`)) continue;
+        await sendNotification({
+          userId: student.parentId,
+          userType: 'PARENT',
+          title: 'Bus approaching stop',
+          body: `Bus ${trip.bus.busNumber} is arriving at ${nextStop.name} in ~${Math.round(etaMinutes)} min for ${student.name}.`,
+          data: {
+            event: 'approaching-stop',
+            studentId: student.id,
+            stopId: nextStop.id,
+            eta: etaMinutes,
+            busNumber: trip.bus.busNumber,
+          },
+        });
+      } catch (error) {
+        console.error('Failed to notify parent about approaching stop:', error);
+      }
     }
   }
 

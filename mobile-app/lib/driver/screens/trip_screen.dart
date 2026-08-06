@@ -24,7 +24,9 @@ class _TripScreenState extends State<TripScreen> {
   bool _isTripActive = false;
   String? _activeTripId;
   List<Map<String, dynamic>> _students = [];
-  Map<String, bool> _boardedStudents = {};
+  final Map<String, bool> _boardedStudents = {};
+  final Map<String, bool> _droppedStudents = {};
+  String _markMode = 'BOARDING';
   bool _loading = true;
   LatLng? _currentLocation;
   bool _permissionGranted = false;
@@ -194,6 +196,86 @@ class _TripScreenState extends State<TripScreen> {
     }
   }
 
+  Future<void> _markDropoff(String studentId) async {
+    if (_activeTripId == null) return;
+    try {
+      final api = ApiService();
+      final response = await api.markDropoff(studentId, _activeTripId!);
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        setState(() => _droppedStudents[studentId] = true);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to mark drop-off: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _triggerSos() async {
+    if (_activeTripId == null) return;
+    _socketService.triggerEmergency(_activeTripId!, 'Emergency triggered by driver (SOS)');
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('SOS alert sent to school')),
+      );
+    }
+  }
+
+  Future<void> _reportIncident(String type) async {
+    if (_activeTripId == null) return;
+    try {
+      final api = ApiService();
+      await api.reportIncident(_activeTripId!, type);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(type == 'DELAY' ? 'Delay reported to school' : 'Breakdown reported to school')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to report: $e')),
+        );
+      }
+    }
+  }
+
+  void _showReportSheet() {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ListTile(
+              leading: Icon(Icons.report_problem),
+              title: Text('Report issue to school'),
+              textColor: AppColors.dark,
+            ),
+            ListTile(
+              leading: Icon(Icons.schedule, color: AppColors.alertOrange),
+              title: const Text('Bus delayed'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _reportIncident('DELAY');
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.build, color: AppColors.dangerRed),
+              title: const Text('Breakdown'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _reportIncident('BREAKDOWN');
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final boardedCount = _boardedStudents.values.where((v) => v).length;
@@ -351,6 +433,56 @@ class _TripScreenState extends State<TripScreen> {
                           ),
                         ),
                         const SizedBox(height: 16),
+                        if (_isTripActive)
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: _triggerSos,
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: AppColors.dangerRed,
+                                    side: const BorderSide(color: AppColors.dangerRed),
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                  ),
+                                  icon: const Icon(Icons.warning_amber),
+                                  label: const Text('SOS', style: TextStyle(fontWeight: FontWeight.bold)),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: _showReportSheet,
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: AppColors.alertOrange,
+                                    side: const BorderSide(color: AppColors.alertOrange),
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                  ),
+                                  icon: const Icon(Icons.report_problem),
+                                  label: const Text('Report', style: TextStyle(fontWeight: FontWeight.bold)),
+                                ),
+                              ),
+                            ],
+                          ),
+                        const SizedBox(height: 16),
+                        if (_isTripActive)
+                          SegmentedButton<String>(
+                            segments: const [
+                              ButtonSegment(
+                                value: 'BOARDING',
+                                label: Text('Boarding'),
+                                icon: Icon(Icons.airline_seat_recline_normal),
+                              ),
+                              ButtonSegment(
+                                value: 'DROPOFF',
+                                label: Text('Drop-off'),
+                                icon: Icon(Icons.airline_seat_individual_suite),
+                              ),
+                            ],
+                            selected: {_markMode},
+                            onSelectionChanged: (selection) =>
+                                setState(() => _markMode = selection.first),
+                          ),
+                        const SizedBox(height: 16),
                         Card(
                           child: Padding(
                             padding: const EdgeInsets.all(16),
@@ -360,20 +492,20 @@ class _TripScreenState extends State<TripScreen> {
                                 Column(
                                   children: [
                                     Text(
-                                      '$boardedCount',
+                                      '${_markMode == 'BOARDING' ? boardedCount : _droppedStudents.values.where((v) => v).length}',
                                       style: const TextStyle(
                                         fontSize: 24,
                                         fontWeight: FontWeight.bold,
                                         color: AppColors.safeGreen,
                                       ),
                                     ),
-                                    const Text('Boarded'),
+                                    Text(_markMode == 'BOARDING' ? 'Boarded' : 'Dropped Off'),
                                   ],
                                 ),
                                 Column(
                                   children: [
                                     Text(
-                                      '${_students.length - boardedCount}',
+                                      '${_students.length - (boardedCount)}',
                                       style: const TextStyle(
                                         fontSize: 24,
                                         fontWeight: FontWeight.bold,
@@ -416,24 +548,29 @@ class _TripScreenState extends State<TripScreen> {
   Widget _buildStudentCard(Map<String, dynamic> student) {
     final id = student['id'];
     final boarded = _boardedStudents[id] == true;
+    final dropped = _droppedStudents[id] == true;
     final stop = student['stop'];
+    final isBoardingMode = _markMode == 'BOARDING';
+    final done = isBoardingMode ? boarded : dropped;
     return Card(
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: boarded ? AppColors.safeGreen : AppColors.medium,
-          child: Icon(boarded ? Icons.check : Icons.person, color: AppColors.white),
+          backgroundColor: done ? AppColors.safeGreen : AppColors.medium,
+          child: Icon(done ? Icons.check : Icons.person, color: AppColors.white),
         ),
         title: Text(student['name'] ?? ''),
         subtitle: Text('Stop: ${stop?['name'] ?? 'N/A'}'),
-        trailing: boarded
-            ? const Chip(
-                label: Text('Boarded'),
+        trailing: done
+            ? Chip(
+                label: Text(isBoardingMode ? 'Boarded' : 'Dropped'),
                 backgroundColor: AppColors.safeGreen,
-                labelStyle: TextStyle(color: AppColors.white),
+                labelStyle: const TextStyle(color: AppColors.white),
               )
             : ElevatedButton(
-                onPressed: _isTripActive ? () => _markBoarding(id) : null,
-                child: const Text('Mark'),
+                onPressed: _isTripActive
+                    ? () => isBoardingMode ? _markBoarding(id) : _markDropoff(id)
+                    : null,
+                child: Text(isBoardingMode ? 'Board' : 'Drop'),
               ),
       ),
     );

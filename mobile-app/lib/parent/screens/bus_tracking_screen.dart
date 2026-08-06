@@ -24,9 +24,13 @@ class _BusTrackingScreenState extends State<BusTrackingScreen> {
   LatLng? _busLocation;
   List<Map<String, dynamic>> _stops = [];
   String? _driverName;
+  String? _nextStopName;
+  int? _nextStopEta;
   bool _loading = true;
   bool _isRealTimeActive = false;
   StreamSubscription? _locationSubscription;
+  StreamSubscription? _approachingSubscription;
+  String? _lastAlertKey;
 
   @override
   void initState() {
@@ -38,6 +42,7 @@ class _BusTrackingScreenState extends State<BusTrackingScreen> {
   @override
   void dispose() {
     _locationSubscription?.cancel();
+    _approachingSubscription?.cancel();
     if (widget.busId != null) {
       _socketService.leaveBusRoom(widget.busId!);
     }
@@ -55,13 +60,34 @@ class _BusTrackingScreenState extends State<BusTrackingScreen> {
         final lat = data['latitude'];
         final lng = data['longitude'];
         if (lat != null && lng != null) {
+          final nextStop = data['nextStop'];
           setState(() {
             _busLocation = LatLng(lat.toDouble(), lng.toDouble());
             _isRealTimeActive = true;
+            if (nextStop != null) {
+              _nextStopName = nextStop['name'];
+              _nextStopEta = nextStop['eta']?.round();
+            } else {
+              _nextStopName = null;
+              _nextStopEta = null;
+            }
           });
           _mapController.move(_busLocation!, _mapController.zoom);
         }
       }
+    });
+
+    _approachingSubscription = _socketService.approachingStopStream.listen((data) {
+      if (!mounted) return;
+      final alertKey = '${data['studentId']}:${data['stopName']}:${data['eta']?.toStringAsFixed(0)}';
+      if (alertKey == _lastAlertKey) return;
+      _lastAlertKey = alertKey;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Bus ${data['busNumber']} approaching ${data['stopName']} in ~${data['eta']?.round()} min'),
+          duration: const Duration(seconds: 5),
+        ),
+      );
     });
   }
 
@@ -143,10 +169,34 @@ class _BusTrackingScreenState extends State<BusTrackingScreen> {
                         center: _busLocation ?? _defaultLocation,
                         zoom: 15.0,
                         controller: _mapController,
+                        polylines: [
+                          if (_stops.length > 1)
+                            Polyline(
+                              points: [
+                                for (final stop in _stops)
+                                  LatLng(
+                                    (stop['latitude'] as num).toDouble(),
+                                    (stop['longitude'] as num).toDouble(),
+                                  ),
+                              ],
+                              strokeWidth: 4,
+                              color: AppColors.skyBlue.withOpacity(0.7),
+                            ),
+                        ],
                         markers: [
                           if (_busLocation != null)
                             buildBusMarker(_busLocation!, 90, widget.busNumber ?? 'BUS', true),
                           buildParentMarker(_defaultLocation, 'Home'),
+                          for (final stop in _stops)
+                            if (stop['latitude'] != null && stop['longitude'] != null)
+                              buildStopMarker(
+                                LatLng(
+                                  (stop['latitude'] as num).toDouble(),
+                                  (stop['longitude'] as num).toDouble(),
+                                ),
+                                stop['name'] ?? '',
+                                false,
+                              ),
                         ],
                       ),
                       Positioned(
@@ -182,6 +232,13 @@ class _BusTrackingScreenState extends State<BusTrackingScreen> {
                                         _busLocation != null ? 'Bus is active' : 'Bus not active',
                                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                                       ),
+                                      if (_nextStopName != null && _nextStopEta != null) ...[
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          'Next stop: $_nextStopName (~$_nextStopEta min)',
+                                          style: const TextStyle(color: AppColors.alertOrange, fontSize: 12),
+                                        ),
+                                      ],
                                       Text(
                                         _driverName != null ? 'Driver: $_driverName' : 'No driver assigned',
                                         style: const TextStyle(color: AppColors.medium, fontSize: 12),

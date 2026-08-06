@@ -34,6 +34,7 @@ const attendanceReportValidation = [
 ];
 
 // Routes
+router.get('/', authenticate, authorize('ADMIN'), attendanceController.getAttendanceHistory);
 router.post('/board', authenticate, authorize('DRIVER'), validate(markAttendanceValidation), attendanceController.markBoarding);
 router.post('/drop', authenticate, authorize('DRIVER'), validate(markAttendanceValidation), attendanceController.markDropoff);
 router.get('/trip/:tripId', authenticate, authorize('ADMIN', 'DRIVER'), attendanceController.getTripAttendance);

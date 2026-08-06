@@ -22,11 +22,17 @@ class SocketService {
       StreamController<Map<String, dynamic>>.broadcast();
   final StreamController<Map<String, dynamic>> _emergencyController =
       StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<Map<String, dynamic>> _notificationController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<Map<String, dynamic>> _approachingStopController =
+      StreamController<Map<String, dynamic>>.broadcast();
 
   Stream<Map<String, dynamic>> get locationStream => _locationController.stream;
   Stream<Map<String, dynamic>> get tripStream => _tripController.stream;
   Stream<Map<String, dynamic>> get attendanceStream => _attendanceController.stream;
   Stream<Map<String, dynamic>> get emergencyStream => _emergencyController.stream;
+  Stream<Map<String, dynamic>> get notificationStream => _notificationController.stream;
+  Stream<Map<String, dynamic>> get approachingStopStream => _approachingStopController.stream;
 
   bool get isConnected => _isConnected;
 
@@ -77,6 +83,10 @@ class SocketService {
       _locationController.add(Map<String, dynamic>.from(data));
     });
 
+    _socket!.on('bus:location-update', (data) {
+      _locationController.add(Map<String, dynamic>.from(data));
+    });
+
     _socket!.on('trip:started', (data) {
       _tripController.add(Map<String, dynamic>.from(data));
     });
@@ -91,6 +101,14 @@ class SocketService {
 
     _socket!.on('fleet:emergency-alert', (data) {
       _emergencyController.add(Map<String, dynamic>.from(data));
+    });
+
+    _socket!.on('notification:new', (data) {
+      _notificationController.add(Map<String, dynamic>.from(data));
+    });
+
+    _socket!.on('bus:approaching-stop', (data) {
+      _approachingStopController.add(Map<String, dynamic>.from(data));
     });
 
     _socket!.on('error', (data) {
@@ -182,11 +200,20 @@ class SocketService {
     });
   }
 
+  void triggerParentEmergency({String? studentName, String message = 'Emergency triggered by parent'}) {
+    _socket?.emit('parent:emergency', {
+      'studentName': studentName,
+      'message': message,
+    });
+  }
+
   void dispose() {
     disconnect();
     _locationController.close();
     _tripController.close();
     _attendanceController.close();
     _emergencyController.close();
+    _notificationController.close();
+    _approachingStopController.close();
   }
 }

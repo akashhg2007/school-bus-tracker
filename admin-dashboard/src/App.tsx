@@ -7,11 +7,15 @@ import Dashboard from './pages/Dashboard';
 import BusManagement from './pages/BusManagement';
 import DriverManagement from './pages/DriverManagement';
 import StudentManagement from './pages/StudentManagement';
+import Parents from './pages/Parents';
 import RouteManagement from './pages/RouteManagement';
 import LiveTracking from './pages/LiveTracking';
 import TripHistory from './pages/TripHistory';
 import AttendanceReports from './pages/AttendanceReports';
 import Notifications from './pages/Notifications';
+import LeaveRequests from './pages/LeaveRequests';
+import Announcements from './pages/Announcements';
+import Maintenance from './pages/Maintenance';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuth();
@@ -49,10 +53,14 @@ const App: React.FC = () => {
             <Route path="buses" element={<BusManagement />} />
             <Route path="drivers" element={<DriverManagement />} />
             <Route path="students" element={<StudentManagement />} />
+            <Route path="parents" element={<Parents />} />
             <Route path="routes" element={<RouteManagement />} />
             <Route path="tracking" element={<LiveTracking />} />
             <Route path="trips" element={<TripHistory />} />
             <Route path="attendance" element={<AttendanceReports />} />
+            <Route path="leave-requests" element={<LeaveRequests />} />
+            <Route path="announcements" element={<Announcements />} />
+            <Route path="maintenance" element={<Maintenance />} />
             <Route path="notifications" element={<Notifications />} />
           </Route>
         </Routes>

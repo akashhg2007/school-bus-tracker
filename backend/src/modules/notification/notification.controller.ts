@@ -66,3 +66,15 @@ export const sendSchoolNotification = async (req: Request, res: Response, next: 
     next(error);
   }
 };
+
+export const reportIncident = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const schoolId = req.user!.schoolId;
+    const { tripId, type, details } = req.body;
+
+    const result = await notificationService.sendIncidentReport(schoolId, tripId, type, details);
+    sendSuccess(res, 'Incident report submitted', result, 201);
+  } catch (error) {
+    next(error);
+  }
+};

@@ -69,6 +69,19 @@ export const getAttendanceReport = async (req: Request, res: Response, next: Nex
   }
 };
 
+export const getAttendanceHistory = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const schoolId = req.user!.schoolId;
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+
+    const result = await attendanceService.getAttendanceHistory(schoolId, page, limit);
+    sendSuccess(res, 'Attendance history retrieved successfully', result);
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const getParentAttendance = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const parentId = req.user!.userId;

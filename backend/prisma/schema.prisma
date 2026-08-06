@@ -25,6 +25,7 @@ model School {
   drivers       Driver[]
   admins        Admin[]
   routes        Route[]
+  announcements Announcement[]
   subscription  Subscription?
 
   createdAt     DateTime       @default(now())
@@ -95,6 +96,7 @@ model Bus {
   students      Student[]
   trips         Trip[]
   gpsDeviceId   String?
+  maintenance   MaintenanceRecord[]
   isActive      Int            @default(1)
 
   createdAt     DateTime       @default(now())
@@ -238,4 +240,31 @@ model Subscription {
 
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
+}
+
+// ==================== ANNOUNCEMENT MODEL ====================
+
+model Announcement {
+  id        String   @id @default(uuid())
+  schoolId  String
+  school    School   @relation(fields: [schoolId], references: [id])
+  title     String
+  body      String
+  createdAt DateTime @default(now())
+}
+
+// ==================== MAINTENANCE MODEL ====================
+
+model MaintenanceRecord {
+  id          String    @id @default(uuid())
+  busId       String
+  bus         Bus       @relation(fields: [busId], references: [id])
+  title       String
+  description String?
+  dueDate     DateTime
+  status      String    @default("PENDING")
+  completedAt DateTime?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import api from '../services/api';
+import api, { unwrapList } from '../services/api';
 
 interface Student {
   id: string;
@@ -15,6 +15,9 @@ const StudentManagement: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
+  const [parentOptions, setParentOptions] = useState<Array<{ id: string; name: string; phone: string }>>([]);
+  const [busOptions, setBusOptions] = useState<Array<{ id: string; busNumber: string }>>([]);
+  const [stopOptions, setStopOptions] = useState<Array<{ id: string; name: string; routeName: string }>>([]);
   const [formData, setFormData] = useState({
     name: '',
     rollNumber: '',
@@ -25,12 +28,30 @@ const StudentManagement: React.FC = () => {
 
   useEffect(() => {
     loadStudents();
+    api.get('/parents', { params: { limit: 100 } })
+      .then((res) => setParentOptions(unwrapList(res.data)))
+      .catch((error) => console.error('Error loading parents:', error));
+    api.get('/buses', { params: { limit: 100 } })
+      .then((res) => setBusOptions(unwrapList(res.data)))
+      .catch((error) => console.error('Error loading buses:', error));
+    api.get('/routes', { params: { limit: 100 } })
+      .then((res) => {
+        const routes = unwrapList(res.data);
+        const stops: Array<{ id: string; name: string; routeName: string }> = [];
+        for (const route of routes) {
+          for (const stop of route.stops || []) {
+            stops.push({ id: stop.id, name: stop.name, routeName: route.name });
+          }
+        }
+        setStopOptions(stops);
+      })
+      .catch((error) => console.error('Error loading routes:', error));
   }, []);
 
   const loadStudents = async () => {
     try {
       const response = await api.get('/students');
-      setStudents(response.data?.data || []);
+      setStudents(unwrapList(response.data));
     } catch (error) {
       console.error('Error loading students:', error);
     }
@@ -148,16 +169,32 @@ const StudentManagement: React.FC = () => {
                 <input type="text" value={formData.rollNumber} onChange={(e) => setFormData({ ...formData, rollNumber: e.target.value })} className="w-full border rounded-lg px-3 py-2" required />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Parent ID</label>
-                <input type="text" value={formData.parentId} onChange={(e) => setFormData({ ...formData, parentId: e.target.value })} className="w-full border rounded-lg px-3 py-2" placeholder="UUID of parent" required={!editingStudent} />
+                <label className="block text-sm font-medium text-gray-700">Parent</label>
+                <select value={formData.parentId} onChange={(e) => setFormData({ ...formData, parentId: e.target.value })} className="w-full border rounded-lg px-3 py-2" required={!editingStudent}>
+                  <option value="">-- Select parent --</option>
+                  {parentOptions.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name} ({p.phone})</option>
+                  ))}
+                </select>
+                {parentOptions.length === 0 && <p className="text-xs text-gray-400 mt-1">No parents yet — add parents first.</p>}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Bus ID (optional)</label>
-                <input type="text" value={formData.busId} onChange={(e) => setFormData({ ...formData, busId: e.target.value })} className="w-full border rounded-lg px-3 py-2" placeholder="UUID of bus" />
+                <label className="block text-sm font-medium text-gray-700">Bus (optional)</label>
+                <select value={formData.busId} onChange={(e) => setFormData({ ...formData, busId: e.target.value })} className="w-full border rounded-lg px-3 py-2">
+                  <option value="">-- Unassigned --</option>
+                  {busOptions.map((b) => (
+                    <option key={b.id} value={b.id}>{b.busNumber}</option>
+                  ))}
+                </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Stop ID (optional)</label>
-                <input type="text" value={formData.stopId} onChange={(e) => setFormData({ ...formData, stopId: e.target.value })} className="w-full border rounded-lg px-3 py-2" placeholder="UUID of stop" />
+                <label className="block text-sm font-medium text-gray-700">Stop (optional)</label>
+                <select value={formData.stopId} onChange={(e) => setFormData({ ...formData, stopId: e.target.value })} className="w-full border rounded-lg px-3 py-2">
+                  <option value="">-- No stop --</option>
+                  {stopOptions.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name} ({s.routeName})</option>
+                  ))}
+                </select>
               </div>
               <div className="flex justify-end space-x-2">
                 <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 border rounded-lg">Cancel</button>

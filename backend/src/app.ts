@@ -18,6 +18,10 @@ import tripRoutes from './modules/trip/trip.routes';
 import attendanceRoutes from './modules/attendance/attendance.routes';
 import locationRoutes from './modules/location/location.routes';
 import notificationRoutes from './modules/notification/notification.routes';
+import leaveRoutes from './modules/leave/leave.routes';
+import announcementRoutes from './modules/announcement/announcement.routes';
+import maintenanceRoutes from './modules/maintenance/maintenance.routes';
+import parentRoutes from './modules/parent/parent.routes';
 
 // Load environment variables
 dotenv.config();
@@ -49,6 +53,10 @@ app.use('/api/trips', tripRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/location', locationRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/leaves', leaveRoutes);
+app.use('/api/announcements', announcementRoutes);
+app.use('/api/maintenance', maintenanceRoutes);
+app.use('/api/parents', parentRoutes);
 
 // Serve admin dashboard (built SPA) if present
 const clientDist = path.join(__dirname, '..', '..', 'admin-dashboard', 'dist');
