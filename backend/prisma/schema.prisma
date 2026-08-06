@@ -1,0 +1,241 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== CORE MODELS ====================
+
+model School {
+  id            String         @id @default(uuid())
+  name          String
+  address       String
+  city          String
+  state         String
+  phone         String
+  email         String
+  logo          String?
+  isActive      Int            @default(1)
+
+  buses         Bus[]
+  parents       Parent[]
+  drivers       Driver[]
+  admins        Admin[]
+  routes        Route[]
+  subscription  Subscription?
+
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+// ==================== USER MODELS ====================
+
+model Admin {
+  id            String         @id @default(uuid())
+  name          String
+  phone         String         @unique
+  email         String?
+  schoolId      String
+  school        School         @relation(fields: [schoolId], references: [id])
+  isActive      Int            @default(1)
+
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model Driver {
+  id            String         @id @default(uuid())
+  name          String
+  phone         String         @unique
+  licenseNumber String         @unique
+  email         String?
+  schoolId      String
+  school        School         @relation(fields: [schoolId], references: [id])
+  bus           Bus?
+  trips         Trip[]
+  fcmToken      String?
+  isActive      Int            @default(1)
+
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model Parent {
+  id            String         @id @default(uuid())
+  name          String
+  phone         String         @unique
+  email         String?
+  schoolId      String
+  school        School         @relation(fields: [schoolId], references: [id])
+  students      Student[]
+  leaveRequests LeaveRequest[]
+  fcmToken      String?
+  isActive      Int            @default(1)
+
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+// ==================== BUS & ROUTE MODELS ====================
+
+model Bus {
+  id            String         @id @default(uuid())
+  busNumber     String
+  plateNumber   String
+  capacity      Int
+  schoolId      String
+  school        School         @relation(fields: [schoolId], references: [id])
+  driverId      String?        @unique
+  driver        Driver?        @relation(fields: [driverId], references: [id])
+  routeId       String?
+  route         Route?         @relation(fields: [routeId], references: [id])
+  students      Student[]
+  trips         Trip[]
+  gpsDeviceId   String?
+  isActive      Int            @default(1)
+
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model Route {
+  id            String         @id @default(uuid())
+  name          String
+  schoolId      String
+  school        School         @relation(fields: [schoolId], references: [id])
+  stops         Stop[]
+  buses         Bus[]
+
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model Stop {
+  id            String         @id @default(uuid())
+  name          String
+  latitude      Float
+  longitude     Float
+  routeId       String
+  route         Route          @relation(fields: [routeId], references: [id])
+  order         Int
+  students      Student[]
+
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+// ==================== STUDENT MODEL ====================
+
+model Student {
+  id            String         @id @default(uuid())
+  name          String
+  rollNumber    String
+  parentId      String
+  parent        Parent         @relation(fields: [parentId], references: [id])
+  busId         String?
+  bus           Bus?           @relation(fields: [busId], references: [id])
+  stopId        String?
+  stop          Stop?          @relation(fields: [stopId], references: [id])
+  attendance    Attendance[]
+  leaveRequests LeaveRequest[]
+
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+// ==================== TRIP MODELS ====================
+
+model Trip {
+  id            String         @id @default(uuid())
+  busId         String
+  bus           Bus            @relation(fields: [busId], references: [id])
+  driverId      String
+  driver        Driver         @relation(fields: [driverId], references: [id])
+  type          String
+  status        String         @default("PENDING")
+  startTime     DateTime?
+  endTime       DateTime?
+  attendance    Attendance[]
+  gpsLocations  GpsLocation[]
+
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+// ==================== GPS & ATTENDANCE MODELS ====================
+
+model GpsLocation {
+  id            String         @id @default(uuid())
+  tripId        String
+  trip          Trip           @relation(fields: [tripId], references: [id])
+  latitude      Float
+  longitude     Float
+  speed         Float?
+  heading       Float?
+  accuracy      Float?
+
+  createdAt     DateTime       @default(now())
+}
+
+model Attendance {
+  id            String         @id @default(uuid())
+  studentId     String
+  student       Student        @relation(fields: [studentId], references: [id])
+  tripId        String
+  trip          Trip           @relation(fields: [tripId], references: [id])
+  type          String
+  status        String
+  markedBy      String
+
+  createdAt     DateTime       @default(now())
+}
+
+// ==================== NOTIFICATION MODELS ====================
+
+model Notification {
+  id            String         @id @default(uuid())
+  userId        String
+  userType      String
+  title         String
+  body          String
+  data          String?
+  isRead        Int            @default(0)
+
+  createdAt     DateTime       @default(now())
+}
+
+// ==================== LEAVE REQUEST MODEL ====================
+
+model LeaveRequest {
+  id            String         @id @default(uuid())
+  studentId     String
+  student       Student        @relation(fields: [studentId], references: [id])
+  parentId      String
+  parent        Parent         @relation(fields: [parentId], references: [id])
+  date          DateTime
+  reason        String
+  status        String         @default("PENDING")
+
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+// ==================== SUBSCRIPTION MODEL ====================
+
+model Subscription {
+  id            String         @id @default(uuid())
+  schoolId      String         @unique
+  school        School         @relation(fields: [schoolId], references: [id])
+  plan          String
+  studentCount  Int
+  startDate     DateTime
+  endDate       DateTime
+  amount        Float
+  status        String         @default("ACTIVE")
+
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
