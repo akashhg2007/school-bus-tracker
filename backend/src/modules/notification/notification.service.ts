@@ -1,6 +1,7 @@
 import prisma from '../../config/database';
 import { emitToRoom } from '../../socket';
 import { NotFoundError } from '../../utils/errors';
+import { sendPush, getFcmToken } from './fcm.service';
 
 interface SendNotificationInput {
   userId: string;
@@ -23,6 +24,12 @@ export const sendNotification = async (data: SendNotificationInput) => {
 
   const roomName = `${data.userType.toLowerCase()}:${data.userId}`;
   emitToRoom(roomName, 'notification:new', notification);
+
+  if (data.userType === 'PARENT' || data.userType === 'DRIVER') {
+    getFcmToken(data.userType, data.userId).then((token) => {
+      if (token) sendPush(token, { title: data.title, body: data.body, data: data.data });
+    });
+  }
 
   return notification;
 };
@@ -47,6 +54,11 @@ export const sendBulkNotification = async (
   for (const user of userIds) {
     const roomName = `${user.userType.toLowerCase()}:${user.userId}`;
     emitToRoom(roomName, 'notification:new', { title, body, data });
+    if (user.userType === 'PARENT' || user.userType === 'DRIVER') {
+      getFcmToken(user.userType, user.userId).then((token) => {
+        if (token) sendPush(token, { title, body, data });
+      });
+    }
   }
 
   return notifications;
