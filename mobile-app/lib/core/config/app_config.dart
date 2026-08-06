@@ -3,7 +3,7 @@ class AppConfig {
   static const String appVersion = '1.0.0';
   
   // API Configuration
-  static const String apiBaseUrl = 'http://localhost:3000/api';
+  static const String apiBaseUrl = 'https://school-bus-tracker-atim.onrender.com/api';
   
   // Map Configuration (OpenStreetMap)
   static const String mapTileUrl = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
