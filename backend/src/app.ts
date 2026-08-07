@@ -6,7 +6,7 @@ import path from 'path';
 import { initializeFirebase } from './config/firebase';
 import { initializeSocket } from './socket';
 import { AppError } from './utils/errors';
-import { securityHeaders, generalLimiter, corsOptions } from './middleware/security';
+import { securityHeaders, generalLimiter, authLimiter, corsOptions } from './middleware/security';
 import prisma from './config/database';
 
 // Import routes
@@ -38,7 +38,7 @@ app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 // Rate limiting
-app.use('/api/auth', generalLimiter);
+app.use('/api/auth', authLimiter);
 app.use('/api', generalLimiter);
 
 // Health check endpoint
