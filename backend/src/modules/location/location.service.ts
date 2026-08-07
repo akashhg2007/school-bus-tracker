@@ -12,6 +12,10 @@ interface LocationUpdate {
   accuracy?: number;
 }
 
+const MIN_DEDUPE_DISTANCE_M = 10;
+const MAX_DEDUPE_INTERVAL_S = 30;
+const lastSaved = new Map<string, { lat: number; lng: number; at: number }>();
+
 export const updateLocation = async (tripId: string, location: LocationUpdate) => {
   const trip = await prisma.trip.findUnique({
     where: { id: tripId },
@@ -35,6 +39,25 @@ export const updateLocation = async (tripId: string, location: LocationUpdate) =
   if (!trip) {
     throw new NotFoundError('Trip not found');
   }
+
+  const now = Date.now();
+  const last = lastSaved.get(tripId);
+  if (last) {
+    const distanceM = calculateDistance(
+      { latitude: last.lat, longitude: last.lng },
+      { latitude: location.latitude, longitude: location.longitude }
+    ) * 1000;
+    const ageS = (now - last.at) / 1000;
+    if (distanceM < MIN_DEDUPE_DISTANCE_M && ageS < MAX_DEDUPE_INTERVAL_S) {
+      if (lastSaved.size > 5000) lastSaved.clear();
+      return null;
+    }
+  }
+  lastSaved.set(tripId, {
+    lat: location.latitude,
+    lng: location.longitude,
+    at: now,
+  });
 
   // Save GPS location
   const gpsLocation = await prisma.gpsLocation.create({

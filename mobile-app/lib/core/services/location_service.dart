@@ -1,7 +1,8 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:geolocator/geolocator.dart';
-import 'api_service.dart';
 import 'socket_service.dart';
 import '../config/app_config.dart';
 
@@ -10,27 +11,44 @@ class LocationService {
   factory LocationService() => _instance;
   LocationService._internal();
 
-  Timer? _locationTimer;
+  static const double _minSendDistance = 10;
+  static const int _heartbeatSeconds = 30;
+
+  StreamSubscription<Position>? _positionSub;
+  Timer? _sendTimer;
   bool _isTracking = false;
   String? _currentTripId;
 
+  Position? _lastFix;
+  DateTime? _lastFixAt;
+  Position? _lastSent;
+  DateTime? _lastSentAt;
+
+  final StreamController<Map<String, dynamic>> _statusController =
+      StreamController<Map<String, dynamic>>.broadcast();
+
   bool get isTracking => _isTracking;
   String? get currentTripId => _currentTripId;
+  Position? get lastFix => _lastFix;
+  DateTime? get lastFixAt => _lastFixAt;
+
+  Stream<Map<String, dynamic>> get statusStream => _statusController.stream;
+
+  bool get _hasFreshFix {
+    if (_lastFixAt == null) return false;
+    return DateTime.now().difference(_lastFixAt!) < const Duration(seconds: 30);
+  }
 
   Future<bool> checkAndRequestPermission() async {
     try {
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
+      if (!await Geolocator.isLocationServiceEnabled()) {
         debugPrint('Location services are disabled');
         return false;
       }
 
       LocationPermission permission = await Geolocator.checkPermission();
-      debugPrint('Current permission status: $permission');
-
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
-        debugPrint('Permission after request: $permission');
         if (permission == LocationPermission.denied) {
           debugPrint('Location permission denied by user');
           return false;
@@ -43,7 +61,6 @@ class LocationService {
         return false;
       }
 
-      debugPrint('Location permission granted');
       return true;
     } catch (e) {
       debugPrint('Error checking/requesting location permission: $e');
@@ -52,90 +69,167 @@ class LocationService {
   }
 
   Future<Position?> getCurrentPosition() async {
+    if (!await checkAndRequestPermission()) return null;
     try {
-      bool hasPermission = await checkAndRequestPermission();
-      if (!hasPermission) return null;
-
       return await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
         timeLimit: const Duration(seconds: 15),
       );
-    } on TimeoutException {
-      debugPrint('Getting position timed out, trying last known position');
-      try {
-        return await Geolocator.getLastKnownPosition();
-      } catch (e) {
-        debugPrint('Error getting last known position: $e');
-        return null;
-      }
     } catch (e) {
       debugPrint('Error getting current position: $e');
       return null;
     }
   }
 
-  void startTracking(String tripId) {
+  Future<void> startTracking(String tripId, {String? busId}) async {
     if (_isTracking) return;
 
     _currentTripId = tripId;
     _isTracking = true;
+    _lastFix = null;
+    _lastFixAt = null;
+    _lastSent = null;
+    _lastSentAt = null;
 
-    _locationTimer = Timer.periodic(
-      const Duration(seconds: AppConfig.locationUpdateInterval),
-      (_) => _sendLocationUpdate(),
+    try {
+      await FlutterForegroundTask.startService(
+        serviceTypes: [ForegroundServiceTypes.location],
+        notificationTitle: 'School Bus Tracker',
+        notificationText: 'Sharing live GPS location for active trip',
+      );
+    } catch (e) {
+      debugPrint('Foreground service start skipped: $e');
+    }
+
+    _positionSub = Geolocator.getPositionStream(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: AppConfig.locationUpdateDistance,
+      ),
+    ).listen(
+      _onPosition,
+      onError: (Object error) {
+        debugPrint('Position stream error: $error');
+        _emitStatus();
+      },
+      onDone: () {
+        debugPrint('Position stream closed');
+        _emitStatus();
+      },
+      cancelOnError: false,
     );
 
-    _sendLocationUpdate();
+    _sendTimer = Timer.periodic(
+      const Duration(seconds: AppConfig.locationUpdateInterval),
+      (_) => _sendLatest(),
+    );
+
+    _emitStatus();
     debugPrint('Location tracking started for trip: $tripId');
   }
 
-  void stopTracking() {
-    _locationTimer?.cancel();
-    _locationTimer = null;
+  Future<void> stopTracking() async {
+    _positionSub?.cancel();
+    _positionSub = null;
+    _sendTimer?.cancel();
+    _sendTimer = null;
+
+    try {
+      if (await FlutterForegroundTask.isRunningService) {
+        await FlutterForegroundTask.stopService();
+      }
+    } catch (e) {
+      debugPrint('Foreground service stop failed: $e');
+    }
+
     _isTracking = false;
     _currentTripId = null;
+    _lastFix = null;
+    _lastFixAt = null;
+    _lastSent = null;
+    _lastSentAt = null;
+
+    _emitStatus();
     debugPrint('Location tracking stopped');
   }
 
-  Future<void> _sendLocationUpdate() async {
-    if (!_isTracking || _currentTripId == null) return;
+  void _onPosition(Position position) {
+    _lastFix = position;
+    _lastFixAt = DateTime.now();
+    _emitStatus();
+    _sendLatest();
+  }
 
-    try {
-      final position = await getCurrentPosition();
-      if (position == null) {
-        debugPrint('No position available, skipping update');
+  Future<void> _sendLatest() async {
+    if (!_isTracking || _currentTripId == null) return;
+    final position = _lastFix;
+    if (position == null) {
+      _emitStatus();
+      return;
+    }
+
+    final sent = _lastSent;
+    final now = DateTime.now();
+    final age = _lastSentAt == null ? 0 : now.difference(_lastSentAt!).inSeconds;
+
+    if (sent != null) {
+      final moved = _distanceMeters(sent, position);
+      if (moved < _minSendDistance && age < _heartbeatSeconds) {
+        _emitStatus();
         return;
       }
-
-      debugPrint('Sending location: ${position.latitude}, ${position.longitude}');
-
-      final api = ApiService();
-      await api.updateLocation(
-        _currentTripId!,
-        position.latitude,
-        position.longitude,
-        speed: position.speed,
-        heading: position.heading,
-        accuracy: position.accuracy,
-      );
-
-      final socket = SocketService();
-      if (socket.isConnected) {
-        socket.sendLocationUpdate(
-          _currentTripId!,
-          position.latitude,
-          position.longitude,
-          speed: position.speed,
-          heading: position.heading,
-          accuracy: position.accuracy,
-        );
-      }
-    } catch (e) {
-      debugPrint('Error sending location update: $e');
     }
+
+    _lastSent = position;
+    _lastSentAt = now;
+
+    final socket = SocketService();
+    if (!socket.isConnected) {
+      debugPrint('Socket not connected, buffering update');
+      _emitStatus();
+      return;
+    }
+
+    socket.sendLocationUpdate(
+      _currentTripId!,
+      position.latitude,
+      position.longitude,
+      speed: position.speed,
+      heading: position.heading,
+      accuracy: position.accuracy,
+    );
+    _emitStatus();
+  }
+
+  double _distanceMeters(Position a, Position b) {
+    const earthRadius = 6371000.0;
+    final dLat = (b.latitude - a.latitude) * math.pi / 180;
+    final dLng = (b.longitude - a.longitude) * math.pi / 180;
+    final h = math.sin(dLat / 2) * math.sin(dLat / 2) +
+        math.cos(a.latitude * math.pi / 180) *
+            math.cos(b.latitude * math.pi / 180) *
+            math.sin(dLng / 2) * math.sin(dLng / 2);
+    return earthRadius * 2 * math.atan2(math.sqrt(h), math.sqrt(1 - h));
+  }
+
+  void _emitStatus() {
+    if (_statusController.isClosed) return;
+    final now = DateTime.now();
+    _statusController.add({
+      'tracking': _isTracking,
+      'hasFix': _lastFix != null,
+      'fresh': _hasFreshFix,
+      'ageSeconds': _lastFixAt == null ? -1 : now.difference(_lastFixAt!).inSeconds,
+      'latitude': _lastFix?.latitude,
+      'longitude': _lastFix?.longitude,
+      'accuracy': _lastFix?.accuracy,
+    });
   }
 
   void dispose() {
     stopTracking();
+    if (!_statusController.isClosed) {
+      _statusController.close();
+    }
   }
 }

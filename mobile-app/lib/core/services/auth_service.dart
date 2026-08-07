@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'api_service.dart';
+import 'firebase_service.dart';
 
 class AuthService {
   static final AuthService _instance = AuthService._internal();
@@ -66,6 +67,7 @@ class AuthService {
         _user = Map<String, dynamic>.from(data['user']);
         await api.setToken(_token!);
         await _persistAuth();
+        await FirebaseService().registerIfAuthenticated();
         return true;
       }
       return false;

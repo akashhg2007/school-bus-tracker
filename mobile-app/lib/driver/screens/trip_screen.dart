@@ -307,33 +307,7 @@ class _TripScreenState extends State<TripScreen> {
           if (_isTripActive)
             Padding(
               padding: const EdgeInsets.only(right: 8),
-              child: Center(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: _locationService.isTracking ? AppColors.safeGreen : AppColors.alertOrange,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.location_on,
-                        color: AppColors.white,
-                        size: 14,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        _locationService.isTracking ? 'GPS Active' : 'GPS Off',
-                        style: const TextStyle(
-                          color: AppColors.white,
-                          fontSize: 10,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+              child: Center(child: _buildGpsChip()),
             ),
         ],
       ),
@@ -358,25 +332,40 @@ class _TripScreenState extends State<TripScreen> {
                         Positioned(
                           bottom: 16,
                           left: 16,
-                          child: Card(
-                            child: Padding(
-                              padding: const EdgeInsets.all(8),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.circle,
-                                    color: _locationService.isTracking ? AppColors.safeGreen : AppColors.alertOrange,
-                                    size: 12,
+                          child: StreamBuilder<Map<String, dynamic>>(
+                            stream: _locationService.statusStream,
+                            builder: (context, snapshot) {
+                              final status = snapshot.data;
+                              final hasFix = status?['hasFix'] == true;
+                              final fresh = status?['fresh'] == true;
+                              final age = status?['ageSeconds'] ?? -1;
+                              final Color color = !hasFix
+                                  ? AppColors.dangerRed
+                                  : fresh
+                                      ? AppColors.safeGreen
+                                      : AppColors.alertOrange;
+                              final String label = !hasFix
+                                  ? 'Waiting for GPS...'
+                                  : fresh
+                                      ? 'GPS live (age ${age}s)'
+                                      : 'GPS stale (age ${age}s)';
+                              return Card(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(8),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.circle, color: color, size: 12),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        label,
+                                        style: const TextStyle(fontSize: 12),
+                                      ),
+                                    ],
                                   ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    _locationService.isTracking ? 'Sending GPS every 5s' : 'Waiting for GPS...',
-                                    style: const TextStyle(fontSize: 12),
-                                  ),
-                                ],
-                              ),
-                            ),
+                                ),
+                              );
+                            },
                           ),
                         ),
                       if (!_permissionGranted)
@@ -542,6 +531,47 @@ class _TripScreenState extends State<TripScreen> {
                 ),
               ],
             ),
+    );
+  }
+
+  Widget _buildGpsChip() {
+    return StreamBuilder<Map<String, dynamic>>(
+      stream: _locationService.statusStream,
+      builder: (context, snapshot) {
+        final status = snapshot.data;
+        final hasFix = status?['hasFix'] == true;
+        final fresh = status?['fresh'] == true;
+        final Color color = !hasFix
+            ? AppColors.dangerRed
+            : fresh
+                ? AppColors.safeGreen
+                : AppColors.alertOrange;
+        final String label = !hasFix
+            ? _locationService.isTracking
+                ? 'GPS Searching'
+                : 'GPS Off'
+            : fresh
+                ? 'GPS Active'
+                : 'GPS Stale';
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.location_on, color: AppColors.white, size: 14),
+              const SizedBox(width: 4),
+              Text(
+                label,
+                style: const TextStyle(color: AppColors.white, fontSize: 10),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 

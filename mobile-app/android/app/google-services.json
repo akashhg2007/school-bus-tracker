@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "730117995890",
+    "project_id": "sbustrack-59e873",
+    "storage_bucket": "sbustrack-59e873.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:730117995890:android:f6dfe840c5129599e1f1eb",
+        "android_client_info": {
+          "package_name": "com.schoolbustracker.school_bus_tracking"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyACcuwaJBfkhUBUyoJnvGZSlSQR2uK3WcM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

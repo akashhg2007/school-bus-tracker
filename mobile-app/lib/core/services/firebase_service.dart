@@ -10,6 +10,9 @@ class FirebaseService {
   FirebaseService._internal();
 
   bool _enabled = false;
+  String? _token;
+
+  bool get isEnabled => _enabled;
 
   Future<void> initPush() async {
     try {
@@ -23,30 +26,44 @@ class FirebaseService {
 
     try {
       final messaging = FirebaseMessaging.instance;
-      NotificationSettings settings = await messaging.requestPermission();
+      final settings = await messaging.requestPermission();
       debugPrint('FCM permission: ${settings.authorizationStatus}');
 
-      final token = await messaging.getToken();
-      debugPrint('FCM token obtained: ${token != null}');
-      _registerToken(token);
+      messaging.onTokenRefresh.listen((newToken) {
+        _token = newToken;
+        _maybeRegister();
+      });
 
-      messaging.onTokenRefresh.listen((newToken) => _registerToken(newToken));
       FirebaseMessaging.onMessage.listen((RemoteMessage message) {
         debugPrint('FCM foreground message: ${message.notification?.title}');
       });
+
+      final token = await messaging.getToken();
+      if (token != null) {
+        _token = token;
+        _maybeRegister();
+      }
     } catch (e) {
       debugPrint('FCM setup failed: $e');
     }
   }
 
-  Future<void> _registerToken(String? token) async {
-    if (token == null) return;
+  Future<void> registerIfAuthenticated() async {
+    await _maybeRegister();
+  }
+
+  Future<void> _maybeRegister() async {
+    if (!_enabled || _token == null) return;
+    if (!AuthService().isAuthenticated) {
+      debugPrint('Not authenticated yet, deferring FCM token registration');
+      return;
+    }
     try {
       final api = ApiService();
-      await api.sendFcmToken(token);
+      await api.sendFcmToken(_token!);
       debugPrint('FCM token registered');
     } catch (e) {
-      debugPrint('FCM token registration skipped: $e');
+      debugPrint('FCM token registration failed: $e');
     }
   }
 }

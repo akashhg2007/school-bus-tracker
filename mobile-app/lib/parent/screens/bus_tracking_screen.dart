@@ -72,7 +72,7 @@ class _BusTrackingScreenState extends State<BusTrackingScreen> {
               _nextStopEta = null;
             }
           });
-          _mapController.move(_busLocation!, _mapController.zoom);
+          _mapController.move(_busLocation!, _mapController.camera.zoom);
         }
       }
     });
