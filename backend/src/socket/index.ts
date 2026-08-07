@@ -30,11 +30,12 @@ export const initializeSocket = (httpServer: HttpServer): Server => {
 
   io.use((socket: Socket, next) => {
     const token = socket.handshake.auth?.token;
+    if (!token) {
+      return next(new Error('Authentication required'));
+    }
     try {
-      if (token) {
-        const payload = verifyToken(token) as AuthPayload;
-        socket.data.user = payload;
-      }
+      const payload = verifyToken(token) as AuthPayload;
+      socket.data.user = payload;
       next();
     } catch (error) {
       next(new Error('Invalid authentication'));

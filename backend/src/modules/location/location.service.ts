@@ -184,9 +184,13 @@ export const updateLocation = async (tripId: string, location: LocationUpdate) =
   return gpsLocation;
 };
 
-export const getBusLocation = async (busId: string) => {
-  const bus = await prisma.bus.findUnique({
-    where: { id: busId },
+export const getBusLocation = async (busId: string, schoolId?: string) => {
+  const whereClause: any = { id: busId };
+  if (schoolId) {
+    whereClause.schoolId = schoolId;
+  }
+  const bus = await prisma.bus.findFirst({
+    where: whereClause,
     include: {
       trips: {
         where: { status: 'IN_PROGRESS' },

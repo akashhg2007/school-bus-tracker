@@ -40,6 +40,10 @@ class SocketService {
     if (_socket?.connected == true) return;
 
     final auth = AuthService();
+    if (!auth.isAuthenticated) {
+      debugPrint('Cannot connect socket: not authenticated');
+      return;
+    }
     final token = auth.token;
 
     _socket = IO.io(

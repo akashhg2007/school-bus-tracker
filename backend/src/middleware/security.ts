@@ -45,7 +45,7 @@ const securityHeaders = helmet({
 });
 
 // CORS configuration
-const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || process.env.CORS_ORIGIN || '')
   .split(',')
   .map((o) => o.trim())
   .filter(Boolean);

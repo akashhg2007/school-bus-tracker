@@ -33,8 +33,8 @@ const loginValidation = [
   body('password')
     .notEmpty()
     .withMessage('Password is required')
-    .isLength({ min: 6 })
-    .withMessage('Password must be at least 6 characters'),
+    .isLength({ min: 8 })
+    .withMessage('Password must be at least 8 characters'),
 ];
 
 // Registration validation
@@ -59,8 +59,8 @@ const registerValidation = [
   body('password')
     .notEmpty()
     .withMessage('Password is required')
-    .isLength({ min: 6 })
-    .withMessage('Password must be at least 6 characters'),
+    .isLength({ min: 8 })
+    .withMessage('Password must be at least 8 characters'),
   body('schoolId')
     .notEmpty()
     .withMessage('School ID is required'),
@@ -78,8 +78,8 @@ const activateValidation = [
   body('password')
     .notEmpty()
     .withMessage('Password is required')
-    .isLength({ min: 6 })
-    .withMessage('Password must be at least 6 characters'),
+    .isLength({ min: 8 })
+    .withMessage('Password must be at least 8 characters'),
 ];
 
 const fcmTokenValidation = [
@@ -92,10 +92,10 @@ const fcmTokenValidation = [
 router.post('/send-otp', validate(sendOtpValidation), authController.sendOtp);
 router.post('/verify-otp', validate(verifyOtpValidation), authController.verifyOtp);
 
-// Setup password (for bootstrapping existing users)
-router.post('/setup-password', [
+// Setup password (admin-only for bootstrapping users)
+router.post('/setup-password', authenticate, authorize('ADMIN'), [
   body('phone').notEmpty().withMessage('Phone number is required'),
-  body('password').notEmpty().withMessage('Password is required').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+  body('password').notEmpty().withMessage('Password is required').isLength({ min: 8 }).withMessage('Password must be at least 8 characters'),
 ], authController.setupPassword);
 
 // New password-based routes

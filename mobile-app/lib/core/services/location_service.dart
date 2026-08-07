@@ -25,6 +25,9 @@ class LocationService {
   Position? _lastSent;
   DateTime? _lastSentAt;
 
+  static const int _maxBufferSize = 50;
+  final List<Map<String, dynamic>> _offlineBuffer = [];
+
   final StreamController<Map<String, dynamic>> _statusController =
       StreamController<Map<String, dynamic>>.broadcast();
 
@@ -192,10 +195,21 @@ class LocationService {
 
     final socket = SocketService();
     if (!socket.isConnected) {
-      debugPrint('Socket not connected, buffering update');
+      if (_offlineBuffer.length < _maxBufferSize) {
+        _offlineBuffer.add({
+          'tripId': _currentTripId,
+          'latitude': position.latitude,
+          'longitude': position.longitude,
+          'speed': position.speed,
+          'heading': position.heading,
+          'accuracy': position.accuracy,
+        });
+      }
       _emitStatus();
       return;
     }
+
+    _flushOfflineBuffer(socket);
 
     socket.sendLocationUpdate(
       _currentTripId!,
@@ -206,6 +220,22 @@ class LocationService {
       accuracy: position.accuracy,
     );
     _emitStatus();
+  }
+
+  void _flushOfflineBuffer(SocketService socket) {
+    if (_offlineBuffer.isEmpty) return;
+    final pending = List<Map<String, dynamic>>.from(_offlineBuffer);
+    _offlineBuffer.clear();
+    for (final entry in pending) {
+      socket.sendLocationUpdate(
+        entry['tripId'],
+        entry['latitude'],
+        entry['longitude'],
+        speed: entry['speed'],
+        heading: entry['heading'],
+        accuracy: entry['accuracy'],
+      );
+    }
   }
 
   double _distanceMeters(Position a, Position b) {

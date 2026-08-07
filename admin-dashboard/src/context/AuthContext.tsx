@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import api from '../services/api';
 
+
 interface User {
   id: string;
   name: string;
@@ -41,7 +42,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (storedToken && storedUser) {
       setToken(storedToken);
       setUser(JSON.parse(storedUser));
-      api.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
     }
 
     setIsLoading(false);
@@ -69,7 +69,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         localStorage.setItem('token', data.token);
         localStorage.setItem('user', JSON.stringify(userData));
-        api.defaults.headers.common['Authorization'] = `Bearer ${data.token}`;
 
         return { success: true };
       }
@@ -97,7 +96,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setUser(null);
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    delete api.defaults.headers.common['Authorization'];
   };
 
   return (

@@ -24,5 +24,5 @@ class AppConfig {
   static const int locationUpdateDistance = 10; // meters
   
   // Notification Settings (configured via Firebase service account, not FCM sender ID)
-  static const String fcmSenderId = '';
+  static const String fcmSenderId = '730117995890';
 }

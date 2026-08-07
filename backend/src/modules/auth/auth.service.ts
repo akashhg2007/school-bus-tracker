@@ -2,6 +2,7 @@ import prisma from '../../config/database';
 import { generateToken, AuthPayload } from '../../middleware/auth';
 import { NotFoundError, UnauthorizedError, ConflictError, BadRequestError } from '../../utils/errors';
 import { hashPassword, comparePassword } from '../../utils/password';
+import crypto from 'crypto';
 
 interface SendOtpResult {
   sessionInfo: string;
@@ -54,10 +55,8 @@ const isProduction = (): boolean => process.env.NODE_ENV === 'production';
 // ==================== OTP (kept for backward compat) ====================
 
 export const sendOtp = async (phone: string): Promise<SendOtpResult> => {
-  const code = String(Math.floor(100000 + Math.random() * 900000));
+  const code = String(crypto.randomInt(100000, 999999));
   otpStore.set(phone, { code, expiresAt: Date.now() + OTP_TTL_MS, attempts: 0 });
-
-  console.log(`[OTP] Phone: ${phone}, Code: ${code}`);
 
   if (!isProduction()) {
     return { sessionInfo: 'otp-' + Date.now(), devOtp: code };
@@ -86,7 +85,7 @@ export const verifyOtp = async (phone: string, otp?: string): Promise<VerifyOtpR
       throw new UnauthorizedError('Invalid OTP');
     }
     otpStore.delete(phone);
-  } else if (isProduction()) {
+  } else {
     throw new UnauthorizedError('OTP is required');
   }
 
@@ -303,8 +302,6 @@ export const generateActivationToken = async (
 
   const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
   const activationUrl = `${baseUrl}/activate?token=${token}&type=${userType.toLowerCase()}`;
-
-  console.log(`[ACTIVATION] User: ${userId} (${userType}), URL: ${activationUrl}`);
 
   return activationUrl;
 };

@@ -73,10 +73,7 @@ class AuthService {
   Future<bool> verifyOtp(String phone) async {
     try {
       final api = ApiService();
-      debugPrint('Calling verifyOtp for phone: $phone');
       final response = await api.verifyOtp(phone);
-      debugPrint('Verify OTP response status: ${response.statusCode}');
-      debugPrint('Verify OTP response data: ${response.data}');
       if (response.statusCode == 200) {
         final data = response.data['data'];
         _token = data['token'];

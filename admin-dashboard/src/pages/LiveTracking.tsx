@@ -40,7 +40,7 @@ interface FleetUpdate {
   createdAt?: string;
 }
 
-const SOCKET_URL = (import.meta.env.VITE_API_URL || 'http://localhost:3000/api').replace(/\/api$/, '');
+const SOCKET_URL = (import.meta.env.VITE_API_URL || '').replace(/\/api$/, '');
 
 const LiveTracking: React.FC = () => {
   const [buses, setBuses] = useState<Record<string, BusLocation>>({});

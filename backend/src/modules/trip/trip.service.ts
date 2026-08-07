@@ -234,9 +234,13 @@ export const getTripHistory = async (schoolId: string, page: number = 1, limit: 
   return { trips, total, page, limit };
 };
 
-export const getTripById = async (tripId: string) => {
-  const trip = await prisma.trip.findUnique({
-    where: { id: tripId },
+export const getTripById = async (tripId: string, schoolId?: string) => {
+  const whereClause: any = { id: tripId };
+  if (schoolId) {
+    whereClause.bus = { schoolId };
+  }
+  const trip = await prisma.trip.findFirst({
+    where: whereClause,
     include: {
       bus: true,
       driver: true,

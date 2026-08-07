@@ -166,14 +166,16 @@ const Login: React.FC = () => {
               </button>
             </form>
 
-            <div className="mt-6 p-4 bg-blue-50 rounded-xl border border-blue-100">
-              <p className="text-xs font-semibold text-blue-800 mb-2">Demo Credentials</p>
-              <div className="space-y-1 text-xs text-blue-700">
-                <p><span className="font-medium">Admin:</span> 7777777777 / admin123</p>
-                <p><span className="font-medium">Driver:</span> 5555555555 / admin123</p>
-                <p><span className="font-medium">Parent:</span> 9876543210 / admin123</p>
+            {import.meta.env.DEV && (
+              <div className="mt-6 p-4 bg-blue-50 rounded-xl border border-blue-100">
+                <p className="text-xs font-semibold text-blue-800 mb-2">Demo Credentials</p>
+                <div className="space-y-1 text-xs text-blue-700">
+                  <p><span className="font-medium">Admin:</span> 7777777777 / admin123</p>
+                  <p><span className="font-medium">Driver:</span> 5555555555 / admin123</p>
+                  <p><span className="font-medium">Parent:</span> 9876543210 / admin123</p>
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           <p className="text-center text-gray-400 text-xs mt-6">
