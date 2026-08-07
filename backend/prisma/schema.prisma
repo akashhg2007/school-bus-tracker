@@ -7,6 +7,55 @@ datasource db {
   url       = env("DATABASE_URL")
 }
 
+// ==================== ENUMS ====================
+
+enum TripType {
+  MORNING
+  EVENING
+}
+
+enum TripStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum AttendanceType {
+  BOARDING
+  DROPOFF
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum MaintenanceStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum SubscriptionPlan {
+  SMALL
+  MEDIUM
+  LARGE
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
 // ==================== CORE MODELS ====================
 
 model School {
@@ -18,7 +67,7 @@ model School {
   phone         String
   email         String
   logo          String?
-  isActive      Int            @default(1)
+  isActive      Boolean        @default(true)
 
   buses         Bus[]
   parents       Parent[]
@@ -42,7 +91,8 @@ model Admin {
   password      String?
   schoolId      String
   school        School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  isActive      Int            @default(1)
+  isActive      Boolean        @default(true)
+  notifications Notification[]
 
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
@@ -62,7 +112,8 @@ model Driver {
   bus           Bus?
   trips         Trip[]
   fcmToken      String?
-  isActive      Int            @default(1)
+  isActive      Boolean        @default(true)
+  notifications Notification[]
 
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
@@ -81,7 +132,8 @@ model Parent {
   students      Student[]
   leaveRequests LeaveRequest[]
   fcmToken      String?
-  isActive      Int            @default(1)
+  isActive      Boolean        @default(true)
+  notifications Notification[]
 
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
@@ -104,9 +156,9 @@ model Bus {
   route         Route?         @relation(fields: [routeId], references: [id], onDelete: SetNull)
   students      Student[]
   trips         Trip[]
-  gpsDeviceId   String?
+  gpsDeviceId   String?        @unique
   maintenance   MaintenanceRecord[]
-  isActive      Int            @default(1)
+  isActive      Boolean        @default(true)
 
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
@@ -156,7 +208,7 @@ model Student {
   name          String
   rollNumber    String
   parentId      String
-  parent        Parent         @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  parent        Parent         @relation(fields: [parentId], references: [id], onDelete: Restrict)
   busId         String?
   bus           Bus?           @relation(fields: [busId], references: [id], onDelete: SetNull)
   stopId        String?
@@ -170,6 +222,7 @@ model Student {
   @@index([parentId])
   @@index([busId])
   @@index([stopId])
+  @@index([busId, stopId])
   @@unique([rollNumber, parentId])
 }
 
@@ -178,11 +231,11 @@ model Student {
 model Trip {
   id            String         @id @default(uuid())
   busId         String
-  bus           Bus            @relation(fields: [busId], references: [id], onDelete: Cascade)
+  bus           Bus            @relation(fields: [busId], references: [id], onDelete: Restrict)
   driverId      String
-  driver        Driver         @relation(fields: [driverId], references: [id], onDelete: Cascade)
-  type          String
-  status        String         @default("PENDING")
+  driver        Driver         @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  type          TripType
+  status        TripStatus     @default(PENDING)
   startTime     DateTime?
   endTime       DateTime?
   attendance    Attendance[]
@@ -210,7 +263,7 @@ model GpsLocation {
 
   createdAt     DateTime       @default(now())
 
-  @@index([tripId, createdAt])
+  @@index([tripId, createdAt(sort: Desc)])
 }
 
 model Attendance {
@@ -219,32 +272,38 @@ model Attendance {
   student       Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
   tripId        String
   trip          Trip           @relation(fields: [tripId], references: [id], onDelete: Cascade)
-  type          String
-  status        String
+  type          AttendanceType
+  status        AttendanceStatus
   markedBy      String
 
   createdAt     DateTime       @default(now())
 
   @@index([studentId, createdAt])
   @@index([tripId])
+  @@index([tripId, type])
   @@unique([studentId, tripId, type])
 }
 
-// ==================== NOTIFICATION MODELS ====================
+// ==================== NOTIFICATION MODEL ====================
 
 model Notification {
   id            String         @id @default(uuid())
-  userId        String
-  userType      String
+  parentId      String?
+  parent        Parent?        @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  driverId      String?
+  driver        Driver?        @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  adminId       String?
+  admin         Admin?         @relation(fields: [adminId], references: [id], onDelete: Cascade)
   title         String
   body          String
   data          String?
-  isRead        Int            @default(0)
+  isRead        Boolean        @default(false)
 
   createdAt     DateTime       @default(now())
 
-  @@index([userId, userType, createdAt])
-  @@index([isRead])
+  @@index([parentId, isRead, createdAt])
+  @@index([driverId, isRead, createdAt])
+  @@index([adminId, isRead, createdAt])
 }
 
 // ==================== LEAVE REQUEST MODEL ====================
@@ -257,13 +316,14 @@ model LeaveRequest {
   parent        Parent         @relation(fields: [parentId], references: [id], onDelete: Cascade)
   date          DateTime
   reason        String
-  status        String         @default("PENDING")
+  status        LeaveStatus    @default(PENDING)
 
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 
   @@index([parentId, status])
   @@index([studentId])
+  @@index([studentId, status])
 }
 
 // ==================== SUBSCRIPTION MODEL ====================
@@ -272,12 +332,12 @@ model Subscription {
   id            String         @id @default(uuid())
   schoolId      String         @unique
   school        School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  plan          String
+  plan          SubscriptionPlan
   studentCount  Int
   startDate     DateTime
   endDate       DateTime
   amount        Float
-  status        String         @default("ACTIVE")
+  status        SubscriptionStatus @default(ACTIVE)
 
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
@@ -305,7 +365,7 @@ model MaintenanceRecord {
   title       String
   description String?
   dueDate     DateTime
-  status      String    @default("PENDING")
+  status      MaintenanceStatus @default(PENDING)
   completedAt DateTime?
 
   createdAt   DateTime  @default(now())

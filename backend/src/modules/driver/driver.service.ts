@@ -2,6 +2,7 @@ import prisma from '../../config/database';
 import { NotFoundError, ConflictError } from '../../utils/errors';
 import { hashPassword } from '../../utils/password';
 import { sanitizePagination } from '../../utils/pagination';
+import { TripStatus } from '@prisma/client';
 
 interface CreateDriverInput {
   name: string;
@@ -71,7 +72,7 @@ export const getDriversBySchool = async (schoolId: string, page: number = 1, lim
 
   const [drivers, total] = await Promise.all([
     prisma.driver.findMany({
-      where: { schoolId, isActive: 1 },
+      where: { schoolId, isActive: true },
       select: {
         id: true,
         name: true,
@@ -91,7 +92,7 @@ export const getDriversBySchool = async (schoolId: string, page: number = 1, lim
       take: l,
       orderBy: { createdAt: 'desc' },
     }),
-    prisma.driver.count({ where: { schoolId, isActive: 1 } }),
+    prisma.driver.count({ where: { schoolId, isActive: true } }),
   ]);
 
   return { drivers, total, page: p, limit: l };
@@ -176,7 +177,7 @@ export const updateDriver = async (
   if (data.phone !== undefined) allowedFields.phone = data.phone;
   if (data.licenseNumber !== undefined) allowedFields.licenseNumber = data.licenseNumber;
   if (data.email !== undefined) allowedFields.email = data.email;
-  if (data.isActive !== undefined) allowedFields.isActive = data.isActive ? 1 : 0;
+  if (data.isActive !== undefined) allowedFields.isActive = data.isActive ?? true;
   if (data.password) allowedFields.password = await hashPassword(data.password);
 
   const updatedDriver = await prisma.driver.update({
@@ -220,7 +221,7 @@ export const deleteDriver = async (driverId: string, schoolId?: string) => {
 
     await tx.driver.update({
       where: { id: driverId },
-      data: { isActive: 0 },
+      data: { isActive: false },
     });
   });
 

@@ -41,14 +41,12 @@ export const sendNotification = async (req: Request, res: Response, next: NextFu
   try {
     const { userId, userType, title, body, data } = req.body;
 
-    const notification = await notificationService.sendNotification({
-      userId,
-      userType,
-      title,
-      body,
-      data,
-    }, req.user!.schoolId);
+    const input: any = { title, body, data };
+    if (userType === 'PARENT') input.parentId = userId;
+    else if (userType === 'DRIVER') input.driverId = userId;
+    else if (userType === 'ADMIN') input.adminId = userId;
 
+    const notification = await notificationService.sendNotification(input, req.user!.schoolId);
     sendSuccess(res, 'Notification sent successfully', notification, 201);
   } catch (error) {
     next(error);

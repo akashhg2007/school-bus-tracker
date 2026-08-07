@@ -30,7 +30,6 @@ interface UpdateStopInput {
 }
 
 export const createRoute = async (data: CreateRouteInput) => {
-  // Check if route name already exists for this school
   const existingRoute = await prisma.route.findFirst({
     where: {
       name: data.name,
@@ -42,7 +41,6 @@ export const createRoute = async (data: CreateRouteInput) => {
     throw new ConflictError('Route with this name already exists');
   }
 
-  // Create route with stops
   const route = await prisma.route.create({
     data: {
       name: data.name,
@@ -132,7 +130,6 @@ export const updateRoute = async (routeId: string, data: UpdateRouteInput, schoo
     throw new NotFoundError('Route not found');
   }
 
-  // Check for conflicts if updating name
   if (data.name && data.name !== route.name) {
     const existingRoute = await prisma.route.findFirst({
       where: {
@@ -242,27 +239,23 @@ export const updateStop = async (stopId: string, data: UpdateStopInput, schoolId
         orderBy: { order: 'asc' },
       });
 
-      for (const rs of routeStops) {
-        if (rs.id === stopId) continue;
-
-        let newOrder = rs.order;
-        if (targetOrder < stop.order) {
-          if (rs.order >= targetOrder && rs.order < stop.order) {
-            newOrder = rs.order + 1;
+      const updates = routeStops
+        .filter((rs) => rs.id !== stopId)
+        .map((rs) => {
+          let newOrder = rs.order;
+          if (targetOrder < stop.order) {
+            if (rs.order >= targetOrder && rs.order < stop.order) {
+              newOrder = rs.order + 1;
+            }
+          } else {
+            if (rs.order > stop.order && rs.order <= targetOrder) {
+              newOrder = rs.order - 1;
+            }
           }
-        } else {
-          if (rs.order > stop.order && rs.order <= targetOrder) {
-            newOrder = rs.order - 1;
-          }
-        }
-
-        if (newOrder !== rs.order) {
-          await tx.stop.update({
-            where: { id: rs.id },
-            data: { order: newOrder },
-          });
-        }
-      }
+          return newOrder !== rs.order ? tx.stop.update({ where: { id: rs.id }, data: { order: newOrder } }) : null;
+        })
+        .filter(Boolean);
+      await Promise.all(updates);
 
       return tx.stop.update({
         where: { id: stopId },
@@ -311,15 +304,11 @@ export const deleteStop = async (stopId: string, schoolId?: string) => {
     });
 
     const remaining = routeStops.filter((s) => s.id !== stopId);
-    for (let i = 0; i < remaining.length; i++) {
+    const updates = remaining.map((s, i) => {
       const newOrder = i + 1;
-      if (remaining[i].order !== newOrder) {
-        await tx.stop.update({
-          where: { id: remaining[i].id },
-          data: { order: newOrder },
-        });
-      }
-    }
+      return s.order !== newOrder ? tx.stop.update({ where: { id: s.id }, data: { order: newOrder } }) : null;
+    }).filter(Boolean);
+    await Promise.all(updates);
 
     return { message: 'Stop deleted successfully' };
   });

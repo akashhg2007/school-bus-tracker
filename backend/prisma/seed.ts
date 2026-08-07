@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, SubscriptionPlan } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
@@ -6,7 +6,6 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('Seeding database...');
 
-  // Skip if already seeded
   const existSchool = await prisma.school.findFirst();
   if (existSchool) {
     console.log('Database already seeded - skipping');
@@ -15,7 +14,6 @@ async function main() {
 
   const defaultPassword = await bcrypt.hash('admin123', 10);
 
-  // Create a school
   const school = await prisma.school.create({
     data: {
       name: 'Green Valley School',
@@ -29,7 +27,6 @@ async function main() {
 
   console.log('School created:', school.id);
 
-  // Create a route
   const route = await prisma.route.create({
     data: {
       name: 'Route A - Main Road',
@@ -48,7 +45,6 @@ async function main() {
 
   console.log('Route created:', route.id);
 
-  // Create a driver (phone matches Flutter demo)
   const driver = await prisma.driver.create({
     data: {
       name: 'Ramesh Kumar',
@@ -61,7 +57,6 @@ async function main() {
 
   console.log('Driver created:', driver.id);
 
-  // Create a bus
   const bus = await prisma.bus.create({
     data: {
       busNumber: 'BUS-001',
@@ -75,7 +70,6 @@ async function main() {
 
   console.log('Bus created:', bus.id);
 
-  // Create a parent (phone matches Flutter demo)
   const parent = await prisma.parent.create({
     data: {
       name: 'Suresh Kumar',
@@ -88,7 +82,6 @@ async function main() {
 
   console.log('Parent created:', parent.id);
 
-  // Create admin
   const admin = await prisma.admin.create({
     data: {
       name: 'School Admin',
@@ -101,7 +94,6 @@ async function main() {
 
   console.log('Admin created:', admin.id);
 
-  // Create students
   const student1 = await prisma.student.create({
     data: {
       name: 'Rahul Kumar',
@@ -124,11 +116,10 @@ async function main() {
 
   console.log('Students created:', student1.id, student2.id);
 
-  // Create subscription
   const subscription = await prisma.subscription.create({
     data: {
       schoolId: school.id,
-      plan: 'SMALL',
+      plan: SubscriptionPlan.SMALL,
       studentCount: 200,
       startDate: new Date(),
       endDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),

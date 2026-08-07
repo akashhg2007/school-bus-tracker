@@ -1,6 +1,7 @@
 import { Socket } from 'socket.io';
 import { startTrip, endTrip } from '../../modules/trip/trip.service';
 import prisma from '../../config/database';
+import { TripType, TripStatus } from '@prisma/client';
 
 const isDriver = (socket: Socket): string | null => {
   const user = socket.data?.user as { userId?: string; userType?: string } | undefined;
@@ -10,7 +11,7 @@ const isDriver = (socket: Socket): string | null => {
   return null;
 };
 
-const isValidTripType = (type: string): boolean => type === 'MORNING' || type === 'EVENING';
+const isValidTripType = (type: string): type is TripType => type === 'MORNING' || type === 'EVENING';
 
 export const handleTripEvents = (socket: Socket) => {
   socket.on('driver:start-trip', async (data) => {
@@ -43,7 +44,7 @@ export const handleTripEvents = (socket: Socket) => {
         return;
       }
 
-      const trip = await startTrip({ busId, driverId, type });
+      const trip = await startTrip({ busId, driverId, type: type as TripType });
       socket.emit('trip:started', trip);
     } catch (error: any) {
       socket.emit('error', { message: error.message || 'Failed to start trip' });
@@ -75,7 +76,7 @@ export const handleTripEvents = (socket: Socket) => {
         return;
       }
 
-      if (trip.status !== 'IN_PROGRESS') {
+      if (trip.status !== TripStatus.IN_PROGRESS) {
         socket.emit('error', { message: 'Trip is not in progress' });
         return;
       }

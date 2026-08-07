@@ -2,6 +2,7 @@ import { Socket } from 'socket.io';
 import { updateLocation } from '../../modules/location/location.service';
 import { AuthPayload } from '../../middleware/auth';
 import prisma from '../../config/database';
+import { TripStatus } from '@prisma/client';
 
 const getUser = (socket: Socket): AuthPayload | null => (socket.data?.user as AuthPayload) || null;
 
@@ -106,7 +107,7 @@ export const handleLocationUpdate = (socket: Socket) => {
         return;
       }
 
-      if (trip.status !== 'IN_PROGRESS') {
+      if (trip.status !== TripStatus.IN_PROGRESS) {
         socket.emit('error', { message: 'Trip is not in progress' });
         return;
       }

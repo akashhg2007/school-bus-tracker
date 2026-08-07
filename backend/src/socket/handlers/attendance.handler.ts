@@ -1,6 +1,7 @@
 import { Socket } from 'socket.io';
 import { markAttendance } from '../../modules/attendance/attendance.service';
 import prisma from '../../config/database';
+import { AttendanceType, TripStatus } from '@prisma/client';
 
 const getAuth = (socket: Socket): { userId?: string; userType?: string; schoolId?: string } =>
   (socket.data?.user as { userId?: string; userType?: string; schoolId?: string }) || {};
@@ -13,7 +14,7 @@ const canMarkForTrip = async (
     where: { id: tripId },
     include: { bus: { select: { driverId: true } } },
   });
-  return !!trip && trip.bus.driverId === driverId && trip.status === 'IN_PROGRESS';
+  return !!trip && trip.bus.driverId === driverId && trip.status === TripStatus.IN_PROGRESS;
 };
 
 export const handleAttendanceEvents = (socket: Socket) => {
@@ -50,7 +51,7 @@ export const handleAttendanceEvents = (socket: Socket) => {
       const attendance = await markAttendance({
         studentId,
         tripId,
-        type: 'BOARDING',
+        type: AttendanceType.BOARDING,
         markedBy: auth.userId,
       });
 
@@ -93,7 +94,7 @@ export const handleAttendanceEvents = (socket: Socket) => {
       const attendance = await markAttendance({
         studentId,
         tripId,
-        type: 'DROPOFF',
+        type: AttendanceType.DROPOFF,
         markedBy: auth.userId,
       });
 

@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import * as tripService from './trip.service';
 import { sendSuccess } from '../../utils/response';
+import { TripType } from '@prisma/client';
 
 export const startTrip = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
@@ -10,7 +11,7 @@ export const startTrip = async (req: Request, res: Response, next: NextFunction)
     const trip = await tripService.startTrip({
       busId,
       driverId,
-      type,
+      type: type as TripType,
     });
 
     sendSuccess(res, 'Trip started successfully', trip, 201);

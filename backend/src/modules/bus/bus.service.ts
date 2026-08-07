@@ -1,6 +1,7 @@
 import prisma from '../../config/database';
 import { BadRequestError, NotFoundError, ConflictError } from '../../utils/errors';
 import { sanitizePagination } from '../../utils/pagination';
+import { TripStatus } from '@prisma/client';
 
 interface CreateBusInput {
   busNumber: string;
@@ -99,7 +100,7 @@ export const getBusesBySchool = async (schoolId: string, page: number = 1, limit
 
   const [buses, total] = await Promise.all([
     prisma.bus.findMany({
-      where: { schoolId, isActive: 1 },
+      where: { schoolId, isActive: true },
       include: {
         driver: {
           select: { id: true, name: true, phone: true },
@@ -113,7 +114,7 @@ export const getBusesBySchool = async (schoolId: string, page: number = 1, limit
       take: l,
       orderBy: { createdAt: 'desc' },
     }),
-    prisma.bus.count({ where: { schoolId, isActive: 1 } }),
+    prisma.bus.count({ where: { schoolId, isActive: true } }),
   ]);
 
   return { buses, total, page: p, limit: l };
@@ -222,7 +223,7 @@ export const updateBus = async (busId: string, data: UpdateBusInput, schoolId?: 
   if (data.driverId !== undefined) allowedFields.driverId = data.driverId;
   if (data.routeId !== undefined) allowedFields.routeId = data.routeId;
   if (data.gpsDeviceId !== undefined) allowedFields.gpsDeviceId = data.gpsDeviceId;
-  if (data.isActive !== undefined) allowedFields.isActive = data.isActive ? 1 : 0;
+  if (data.isActive !== undefined) allowedFields.isActive = data.isActive;
 
   const updatedBus = await prisma.bus.update({
     where: { id: busId },
@@ -242,7 +243,7 @@ export const deleteBus = async (busId: string, schoolId?: string) => {
     where: { id: busId },
     include: {
       trips: {
-        where: { status: 'IN_PROGRESS' },
+        where: { status: TripStatus.IN_PROGRESS },
         select: { id: true },
       },
     },
@@ -262,7 +263,7 @@ export const deleteBus = async (busId: string, schoolId?: string) => {
 
   await prisma.bus.update({
     where: { id: busId },
-    data: { isActive: 0 },
+    data: { isActive: false },
   });
 
   return { message: 'Bus deleted successfully' };
@@ -273,7 +274,7 @@ export const getBusLiveLocation = async (busId: string, schoolId?: string) => {
     where: { id: busId },
     include: {
       trips: {
-        where: { status: 'IN_PROGRESS' },
+        where: { status: TripStatus.IN_PROGRESS },
         orderBy: { createdAt: 'desc' },
         take: 1,
         include: {

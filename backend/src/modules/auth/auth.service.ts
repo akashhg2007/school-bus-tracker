@@ -227,7 +227,7 @@ export const loginWithPassword = async (
       { phone: identifier },
       { email: identifier },
     ],
-    isActive: 1,
+    isActive: true,
   };
 
   const [parent, driver, admin] = await Promise.all([

@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import * as attendanceService from './attendance.service';
 import { sendSuccess } from '../../utils/response';
+import { AttendanceType } from '@prisma/client';
 
 export const markBoarding = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
@@ -10,7 +11,7 @@ export const markBoarding = async (req: Request, res: Response, next: NextFuncti
     const attendance = await attendanceService.markAttendance({
       studentId,
       tripId,
-      type: 'BOARDING',
+      type: AttendanceType.BOARDING,
       markedBy,
     });
 
@@ -28,7 +29,7 @@ export const markDropoff = async (req: Request, res: Response, next: NextFunctio
     const attendance = await attendanceService.markAttendance({
       studentId,
       tripId,
-      type: 'DROPOFF',
+      type: AttendanceType.DROPOFF,
       markedBy,
     });
 

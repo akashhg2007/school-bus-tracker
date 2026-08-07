@@ -3,6 +3,8 @@ import { NotFoundError, BadRequestError } from '../../utils/errors';
 import { sanitizePagination } from '../../utils/pagination';
 import { emitToRoom } from '../../socket';
 import { sendNotification } from '../notification/notification.service';
+import { TripType, TripStatus, AttendanceStatus } from '@prisma/client';
+import { logger } from '../../utils/logger';
 
 const notifyBusParents = async (busId: string, title: string, body: string, data?: Record<string, any>) => {
   try {
@@ -12,17 +14,17 @@ const notifyBusParents = async (busId: string, title: string, body: string, data
     });
     const parentIds = [...new Set(students.map((s) => s.parentId))];
     await Promise.allSettled(
-      parentIds.map((parentId) => sendNotification({ userId: parentId, userType: 'PARENT', title, body, data }))
+      parentIds.map((parentId) => sendNotification({ parentId, title, body, data }))
     );
   } catch (error) {
-    console.error('Failed to notify bus parents:', error);
+    logger.error('Failed to notify bus parents');
   }
 };
 
 interface StartTripInput {
   busId: string;
   driverId: string;
-  type: 'MORNING' | 'EVENING';
+  type: TripType;
 }
 
 export const startTrip = async (data: StartTripInput) => {
@@ -52,7 +54,7 @@ export const startTrip = async (data: StartTripInput) => {
     const activeTrip = await tx.trip.findFirst({
       where: {
         busId: data.busId,
-        status: 'IN_PROGRESS',
+        status: TripStatus.IN_PROGRESS,
       },
     });
 
@@ -65,7 +67,7 @@ export const startTrip = async (data: StartTripInput) => {
         busId: data.busId,
         driverId: data.driverId,
         type: data.type,
-        status: 'IN_PROGRESS',
+        status: TripStatus.IN_PROGRESS,
         startTime: new Date(),
       },
       include: {
@@ -87,10 +89,10 @@ export const startTrip = async (data: StartTripInput) => {
     type: data.type,
   });
 
-  const startedTitle = data.type === 'EVENING' ? 'Return trip started' : 'Bus has started';
-  const startedBody = `${bus.busNumber} ${data.type === 'EVENING' ? 'return' : 'morning'} trip has started. Driver: ${bus.driver?.name}`;
+  const startedTitle = data.type === TripType.EVENING ? 'Return trip started' : 'Bus has started';
+  const startedBody = `${bus.busNumber} ${data.type === TripType.EVENING ? 'return' : 'morning'} trip has started. Driver: ${bus.driver?.name}`;
   await notifyBusParents(bus.id, startedTitle, startedBody, {
-    event: data.type === 'EVENING' ? 'return-trip-started' : 'trip-started',
+    event: data.type === TripType.EVENING ? 'return-trip-started' : 'trip-started',
     busId: bus.id,
     busNumber: bus.busNumber,
     type: data.type,
@@ -116,14 +118,14 @@ export const endTrip = async (tripId: string, driverId?: string) => {
     throw new NotFoundError('Trip not found');
   }
 
-  if (trip.status !== 'IN_PROGRESS') {
+  if (trip.status !== TripStatus.IN_PROGRESS) {
     throw new BadRequestError('Trip is not in progress');
   }
 
   const updatedTrip = await prisma.trip.update({
     where: { id: tripId },
     data: {
-      status: 'COMPLETED',
+      status: TripStatus.COMPLETED,
       endTime: new Date(),
     },
     include: {
@@ -154,7 +156,7 @@ export const getActiveTrips = async (schoolId: string) => {
   const trips = await prisma.trip.findMany({
     where: {
       bus: { schoolId },
-      status: 'IN_PROGRESS',
+      status: TripStatus.IN_PROGRESS,
     },
     include: {
       bus: {
@@ -178,7 +180,7 @@ export const getActiveTrips = async (schoolId: string) => {
       _count: {
         select: {
           attendance: {
-            where: { status: 'PRESENT' },
+            where: { status: AttendanceStatus.PRESENT },
           },
         },
       },
@@ -216,7 +218,7 @@ export const getTripHistory = async (schoolId: string, page: number = 1, limit: 
         _count: {
           select: {
             attendance: {
-              where: { status: 'PRESENT' },
+              where: { status: AttendanceStatus.PRESENT },
             },
           },
         },
@@ -288,7 +290,7 @@ export const getDriverTrips = async (driverId: string, page: number = 1, limit: 
         _count: {
           select: {
             attendance: {
-              where: { status: 'PRESENT' },
+              where: { status: AttendanceStatus.PRESENT },
             },
           },
         },

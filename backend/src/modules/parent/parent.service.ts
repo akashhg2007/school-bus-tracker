@@ -56,7 +56,7 @@ export const getParentsBySchool = async (schoolId: string, page: number = 1, lim
 
   const [parents, total] = await Promise.all([
     prisma.parent.findMany({
-      where: { schoolId, isActive: 1 },
+      where: { schoolId, isActive: true },
       select: {
         id: true,
         name: true,
@@ -75,7 +75,7 @@ export const getParentsBySchool = async (schoolId: string, page: number = 1, lim
       take: l,
       orderBy: { createdAt: 'desc' },
     }),
-    prisma.parent.count({ where: { schoolId, isActive: 1 } }),
+    prisma.parent.count({ where: { schoolId, isActive: true } }),
   ]);
 
   return { parents, total, page: p, limit: l };
@@ -172,7 +172,7 @@ export const deleteParent = async (parentId: string, schoolId?: string) => {
 
     await tx.parent.update({
       where: { id: parentId },
-      data: { isActive: 0 },
+      data: { isActive: false },
     });
   });
 

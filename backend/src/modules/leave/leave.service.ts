@@ -1,6 +1,7 @@
 import prisma from '../../config/database';
 import { NotFoundError, BadRequestError } from '../../utils/errors';
 import { sanitizePagination } from '../../utils/pagination';
+import { LeaveStatus } from '@prisma/client';
 
 interface CreateLeaveInput {
   studentId: string;
@@ -84,7 +85,7 @@ export const getSchoolLeaveRequests = async (schoolId: string, page: number = 1,
 };
 
 export const updateLeaveStatus = async (leaveId: string, status: string) => {
-  if (!['APPROVED', 'REJECTED'].includes(status)) {
+  if (status !== LeaveStatus.APPROVED && status !== LeaveStatus.REJECTED) {
     throw new BadRequestError('Status must be APPROVED or REJECTED');
   }
 

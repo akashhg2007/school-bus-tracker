@@ -1,6 +1,7 @@
 import prisma from '../../config/database';
 import { NotFoundError, BadRequestError } from '../../utils/errors';
 import { sanitizePagination } from '../../utils/pagination';
+import { MaintenanceStatus } from '@prisma/client';
 
 interface CreateMaintenanceInput {
   schoolId: string;
@@ -59,7 +60,7 @@ export const getSchoolMaintenance = async (schoolId: string, page: number = 1, l
 };
 
 export const updateMaintenanceStatus = async (maintenanceId: string, schoolId: string, status: string) => {
-  if (!['PENDING', 'COMPLETED'].includes(status)) {
+  if (status !== MaintenanceStatus.PENDING && status !== MaintenanceStatus.COMPLETED) {
     throw new BadRequestError('Status must be PENDING or COMPLETED');
   }
 
@@ -75,7 +76,7 @@ export const updateMaintenanceStatus = async (maintenanceId: string, schoolId: s
     where: { id: maintenanceId },
     data: {
       status,
-      completedAt: status === 'COMPLETED' ? new Date() : null,
+      completedAt: status === MaintenanceStatus.COMPLETED ? new Date() : null,
     },
     include: {
       bus: { select: { id: true, busNumber: true } },

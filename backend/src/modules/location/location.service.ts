@@ -4,6 +4,7 @@ import { sanitizePagination } from '../../utils/pagination';
 import { emitToRoom } from '../../socket';
 import { calculateDistance, calculateETA, findNearestStop } from '../../utils/distance';
 import { sendNotification } from '../notification/notification.service';
+import { TripStatus } from '@prisma/client';
 
 interface LocationUpdate {
   latitude: number;
@@ -164,18 +165,17 @@ export const updateLocation = async (tripId: string, location: LocationUpdate) =
     const parentIds = [...new Set(studentsOnBus.map((s) => s.parentId))];
     const recentNotifications = await prisma.notification.findMany({
       where: {
-        userId: { in: parentIds },
-        userType: 'PARENT',
+        parentId: { in: parentIds },
         data: { contains: `"event":"approaching-stop"` },
         createdAt: { gte: new Date(Date.now() - 10 * 60 * 1000) },
       },
-      select: { userId: true, data: true },
+      select: { parentId: true, data: true },
     });
 
     const alreadyNotified = new Set(
       recentNotifications
         .filter((n) => n.data?.includes(`"stopId":"${nextStop.id}"`))
-        .map((n) => n.userId)
+        .map((n) => n.parentId)
     );
 
     for (const student of studentsOnBus) {
@@ -192,8 +192,7 @@ export const updateLocation = async (tripId: string, location: LocationUpdate) =
     await Promise.allSettled(
       studentsToNotify.map((student) =>
         sendNotification({
-          userId: student.parentId,
-          userType: 'PARENT',
+          parentId: student.parentId,
           title: 'Bus approaching stop',
           body: `Bus ${trip.bus.busNumber} is arriving at ${nextStop.name} in ~${Math.round(etaMinutes)} min for ${student.name}.`,
           data: {
@@ -220,7 +219,7 @@ export const getBusLocation = async (busId: string, schoolId?: string) => {
     where: whereClause,
     include: {
       trips: {
-        where: { status: 'IN_PROGRESS' },
+        where: { status: TripStatus.IN_PROGRESS },
         orderBy: { createdAt: 'desc' },
         take: 1,
         include: {
@@ -275,10 +274,10 @@ export const getTripLocationHistory = async (tripId: string, page: number = 1, l
 
 export const getFleetLocations = async (schoolId: string) => {
   const buses = await prisma.bus.findMany({
-    where: { schoolId, isActive: 1 },
+    where: { schoolId, isActive: true },
     include: {
       trips: {
-        where: { status: 'IN_PROGRESS' },
+        where: { status: TripStatus.IN_PROGRESS },
         orderBy: { createdAt: 'desc' },
         take: 1,
         include: {

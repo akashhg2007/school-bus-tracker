@@ -3,11 +3,13 @@ import { NotFoundError, BadRequestError } from '../../utils/errors';
 import { sanitizePagination } from '../../utils/pagination';
 import { emitToRoom } from '../../socket';
 import { sendNotification } from '../notification/notification.service';
+import { AttendanceType, AttendanceStatus, TripStatus, TripType, Prisma } from '@prisma/client';
+import { logger } from '../../utils/logger';
 
 interface MarkAttendanceInput {
   studentId: string;
   tripId: string;
-  type: 'BOARDING' | 'DROPOFF';
+  type: AttendanceType;
   markedBy: string;
 }
 
@@ -25,31 +27,19 @@ export const markAttendance = async (data: MarkAttendanceInput) => {
   });
 
   if (!trip) throw new NotFoundError('Trip not found');
-  if (trip.status !== 'IN_PROGRESS') throw new BadRequestError('Trip is not in progress');
+  if (trip.status !== TripStatus.IN_PROGRESS) throw new BadRequestError('Trip is not in progress');
 
   if (!student.busId || student.busId !== trip.busId) {
     throw new BadRequestError('Student is not assigned to this bus');
   }
 
   const attendance = await prisma.$transaction(async (tx) => {
-    const existingAttendance = await tx.attendance.findFirst({
-      where: {
-        studentId: data.studentId,
-        tripId: data.tripId,
-        type: data.type,
-      },
-    });
-
-    if (existingAttendance) {
-      throw new BadRequestError('Attendance already marked for this student');
-    }
-
     return tx.attendance.create({
       data: {
         studentId: data.studentId,
         tripId: data.tripId,
         type: data.type,
-        status: 'PRESENT',
+        status: AttendanceStatus.PRESENT,
         markedBy: data.markedBy,
       },
       include: {
@@ -57,9 +47,14 @@ export const markAttendance = async (data: MarkAttendanceInput) => {
         trip: { select: { id: true, type: true } },
       },
     });
+  }).catch((e) => {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+      throw new BadRequestError('Attendance already marked for this student');
+    }
+    throw e;
   });
 
-  const eventName = data.type === 'BOARDING' ? 'attendance:student-boarded' : 'attendance:student-dropped';
+  const eventName = data.type === AttendanceType.BOARDING ? 'attendance:student-boarded' : 'attendance:student-dropped';
   emitToRoom(`school:${trip.bus.schoolId}`, eventName, {
     studentId: student.id,
     studentName: student.name,
@@ -70,23 +65,22 @@ export const markAttendance = async (data: MarkAttendanceInput) => {
   });
 
   try {
-    const isEvening = trip.type === 'EVENING';
+    const isEvening = trip.type === TripType.EVENING;
     const title =
-      data.type === 'BOARDING'
+      data.type === AttendanceType.BOARDING
         ? isEvening
           ? 'Boarded for return trip'
           : 'Student boarded the bus'
         : isEvening
           ? 'Reached home stop'
           : 'Reached school';
-    const body = `${student.name} ${data.type === 'BOARDING' ? 'boarded' : 'reached'} ${trip.bus.busNumber} ${isEvening ? 'return' : 'morning'} trip.`;
+    const body = `${student.name} ${data.type === AttendanceType.BOARDING ? 'boarded' : 'reached'} ${trip.bus.busNumber} ${isEvening ? 'return' : 'morning'} trip.`;
     await sendNotification({
-      userId: student.parentId,
-      userType: 'PARENT',
+      parentId: student.parentId,
       title,
       body,
       data: {
-        event: data.type === 'BOARDING' ? 'student-boarded' : 'student-reached',
+        event: data.type === AttendanceType.BOARDING ? 'student-boarded' : 'student-reached',
         studentId: student.id,
         busId: trip.bus.id,
         busNumber: trip.bus.busNumber,
@@ -94,7 +88,7 @@ export const markAttendance = async (data: MarkAttendanceInput) => {
       },
     });
   } catch (error) {
-    console.error('Failed to notify parent of attendance:', error);
+    logger.error('Failed to notify parent of attendance');
   }
 
   return attendance;
@@ -119,8 +113,8 @@ export const getTripAttendance = async (tripId: string, schoolId?: string) => {
   const boardingMap = new Map<string, any>();
   const dropoffMap = new Map<string, any>();
   for (const a of attendance) {
-    if (a.type === 'BOARDING') boardingMap.set(a.studentId, a);
-    if (a.type === 'DROPOFF') dropoffMap.set(a.studentId, a);
+    if (a.type === AttendanceType.BOARDING) boardingMap.set(a.studentId, a);
+    if (a.type === AttendanceType.DROPOFF) dropoffMap.set(a.studentId, a);
   }
 
   const studentsWithAttendance = busStudents.map((student) => {
@@ -128,8 +122,8 @@ export const getTripAttendance = async (tripId: string, schoolId?: string) => {
     const dropoff = dropoffMap.get(student.id);
     return {
       ...student,
-      isBoarded: boarding?.status === 'PRESENT',
-      isDropped: dropoff?.status === 'PRESENT',
+      isBoarded: boarding?.status === AttendanceStatus.PRESENT,
+      isDropped: dropoff?.status === AttendanceStatus.PRESENT,
     };
   });
 
@@ -138,8 +132,8 @@ export const getTripAttendance = async (tripId: string, schoolId?: string) => {
     students: studentsWithAttendance,
     summary: {
       total: busStudents.length,
-      boarded: attendance.filter((a) => a.type === 'BOARDING' && a.status === 'PRESENT').length,
-      dropped: attendance.filter((a) => a.type === 'DROPOFF' && a.status === 'PRESENT').length,
+      boarded: attendance.filter((a) => a.type === AttendanceType.BOARDING && a.status === AttendanceStatus.PRESENT).length,
+      dropped: attendance.filter((a) => a.type === AttendanceType.DROPOFF && a.status === AttendanceStatus.PRESENT).length,
     },
   };
 };
@@ -165,8 +159,8 @@ export const getAttendanceReport = async (schoolId: string, startDate: string, e
   const studentAttendance = attendance.reduce((acc, record) => {
     const sid = record.studentId;
     if (!acc[sid]) acc[sid] = { student: record.student, boarding: 0, dropoff: 0, total: 0 };
-    if (record.type === 'BOARDING' && record.status === 'PRESENT') acc[sid].boarding++;
-    if (record.type === 'DROPOFF' && record.status === 'PRESENT') acc[sid].dropoff++;
+    if (record.type === AttendanceType.BOARDING && record.status === AttendanceStatus.PRESENT) acc[sid].boarding++;
+    if (record.type === AttendanceType.DROPOFF && record.status === AttendanceStatus.PRESENT) acc[sid].dropoff++;
     acc[sid].total++;
     return acc;
   }, {} as Record<string, any>);
