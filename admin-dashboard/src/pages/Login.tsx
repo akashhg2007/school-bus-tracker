@@ -134,11 +134,6 @@ const Login: React.FC = () => {
           </div>
         )}
 
-        <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-          <p className="text-sm text-gray-600 font-medium">Demo Credentials:</p>
-          <p className="text-sm text-gray-500">Phone: 7777777777</p>
-          <p className="text-sm text-gray-500">OTP: Any 6 digits</p>
-        </div>
       </div>
     </div>
   );

@@ -30,6 +30,11 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       });
     } catch (e) {
       setState(() => _loading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load announcements: $e')),
+        );
+      }
     }
   }
 

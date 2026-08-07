@@ -67,3 +67,16 @@ export const updateFcmToken = async (req: Request, res: Response, next: NextFunc
     next(error);
   }
 };
+
+export const getMe = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const user = req.user;
+    if (!user) {
+      throw new Error('User not authenticated');
+    }
+    const profile = await authService.getMe(user.userId, user.userType);
+    sendSuccess(res, 'User profile retrieved', profile);
+  } catch (error) {
+    next(error);
+  }
+};

@@ -155,6 +155,11 @@ class _BusTrackingScreenState extends State<BusTrackingScreen> {
       setState(() => _loading = false);
     } catch (e) {
       setState(() => _loading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load bus data: $e')),
+        );
+      }
     }
   }
 

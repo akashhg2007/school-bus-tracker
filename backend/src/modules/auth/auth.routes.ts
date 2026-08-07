@@ -32,6 +32,7 @@ const fcmTokenValidation = [
 ];
 
 // Routes
+router.get('/me', authenticate, authController.getMe);
 router.post('/send-otp', validate(sendOtpValidation), authController.sendOtp);
 router.post('/verify-otp', validate(verifyOtpValidation), authController.verifyOtp);
 router.post('/refresh-token', authenticate, authController.refreshToken);

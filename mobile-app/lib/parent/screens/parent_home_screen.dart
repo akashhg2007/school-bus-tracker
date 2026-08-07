@@ -37,9 +37,13 @@ class _ParentHomeScreenState extends State<ParentHomeScreen> {
   }
 
   Future<void> _getUserLocation() async {
-    final location = await LocationService().getCurrentLatLng();
-    if (location != null && mounted) {
-      setState(() => _userLocation = location);
+    try {
+      final location = await LocationService().getCurrentLatLng();
+      if (location != null && mounted) {
+        setState(() => _userLocation = location);
+      }
+    } catch (e) {
+      debugPrint('Error getting location: $e');
     }
   }
 
@@ -56,6 +60,11 @@ class _ParentHomeScreenState extends State<ParentHomeScreen> {
       }
     } catch (e) {
       setState(() => _loading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load children: $e')),
+        );
+      }
     }
   }
 
@@ -83,6 +92,27 @@ class _ParentHomeScreenState extends State<ParentHomeScreen> {
     );
   }
 
+  void _confirmLogout() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Logout'),
+        content: const Text('Are you sure you want to logout?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              AuthService().logout();
+              Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => LoginScreen()));
+            },
+            child: const Text('Logout', style: TextStyle(color: AppColors.dangerRed)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = AuthService();
@@ -96,10 +126,7 @@ class _ParentHomeScreenState extends State<ParentHomeScreen> {
           ),
           IconButton(
             icon: const Icon(Icons.logout),
-            onPressed: () {
-              auth.logout();
-              Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => LoginScreen()));
-            },
+            onPressed: _confirmLogout,
           ),
         ],
       ),
@@ -242,14 +269,38 @@ class _ParentHomeScreenState extends State<ParentHomeScreen> {
           const SizedBox(height: 16),
           Text(auth.userName ?? 'Parent', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.dark)),
           const SizedBox(height: 32),
-          _buildProfileMenuItem(icon: Icons.child_care, title: 'My Children', onTap: () {}),
+          _buildProfileMenuItem(icon: Icons.child_care, title: 'My Children', onTap: () {
+            showDialog(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: const Text('My Children'),
+                content: SizedBox(
+                  width: double.maxFinite,
+                  child: _children.isEmpty
+                      ? const Text('No children registered')
+                      : ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: _children.length,
+                          itemBuilder: (context, index) {
+                            final child = _children[index];
+                            final bus = child['bus'];
+                            final stop = child['stop'];
+                            return ListTile(
+                              leading: const CircleAvatar(child: Icon(Icons.child_care)),
+                              title: Text(child['name'] ?? ''),
+                              subtitle: Text('Bus: ${bus?['busNumber'] ?? 'N/A'} • Stop: ${stop?['name'] ?? 'N/A'}'),
+                            );
+                          },
+                        ),
+                ),
+                actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close'))],
+              ),
+            );
+          }),
           _buildProfileMenuItem(icon: Icons.event_busy, title: 'Leave Requests', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const LeaveRequestScreen()))),
           _buildProfileMenuItem(icon: Icons.campaign, title: 'Announcements', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const AnnouncementsScreen()))),
           _buildProfileMenuItem(icon: Icons.notifications, title: 'Notifications', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const NotificationsScreen()))),
-          _buildProfileMenuItem(icon: Icons.logout, title: 'Logout', color: AppColors.dangerRed, onTap: () {
-            auth.logout();
-            Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => LoginScreen()));
-          }),
+          _buildProfileMenuItem(icon: Icons.logout, title: 'Logout', color: AppColors.dangerRed, onTap: _confirmLogout),
         ],
       ),
     );

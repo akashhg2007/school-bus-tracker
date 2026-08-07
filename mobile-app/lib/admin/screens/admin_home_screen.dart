@@ -46,7 +46,33 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
       setState(() => _loading = false);
     } catch (e) {
       setState(() => _loading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load data: $e')),
+        );
+      }
     }
+  }
+
+  void _confirmLogout() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Logout'),
+        content: const Text('Are you sure you want to logout?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              AuthService().logout();
+              Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => LoginScreen()));
+            },
+            child: const Text('Logout', style: TextStyle(color: AppColors.dangerRed)),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -57,10 +83,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.logout),
-            onPressed: () {
-              AuthService().logout();
-              Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => LoginScreen()));
-            },
+            onPressed: _confirmLogout,
           ),
         ],
       ),
@@ -152,11 +175,8 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
           const SizedBox(height: 16),
           Text(auth.userName ?? 'Admin', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.dark)),
           const SizedBox(height: 32),
-          _buildSettingsMenuItem(icon: Icons.school, title: 'School Settings', onTap: () {}),
-          _buildSettingsMenuItem(icon: Icons.logout, title: 'Logout', color: AppColors.dangerRed, onTap: () {
-            auth.logout();
-            Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => LoginScreen()));
-          }),
+          _buildSettingsMenuItem(icon: Icons.school, title: 'School Bus Tracker v1.0', onTap: () {}),
+          _buildSettingsMenuItem(icon: Icons.logout, title: 'Logout', color: AppColors.dangerRed, onTap: _confirmLogout),
         ],
       ),
     );

@@ -34,6 +34,7 @@ class _TripScreenState extends State<TripScreen> {
   LatLng? _currentLocation;
   bool _permissionGranted = false;
   bool _followGps = true;
+  bool _batterySaverMode = false;
   StreamSubscription? _gpsSubscription;
   Map<String, dynamic>? _gpsStatus;
 
@@ -314,7 +315,7 @@ class _TripScreenState extends State<TripScreen> {
       builder: (ctx) => AlertDialog(
         title: const Text('Emergency SOS'),
         content: const Text(
-          'This will immediately alert the school administration and trigger an emergency protocol. '\
+          'This will immediately alert the school administration and trigger an emergency protocol. '
           'Are you sure you want to continue?'
         ),
         actions: [
@@ -432,7 +433,18 @@ class _TripScreenState extends State<TripScreen> {
           if (_isTripActive)
             Padding(
               padding: const EdgeInsets.only(right: 8),
-              child: Center(child: _buildGpsChip()),
+              child: GestureDetector(
+                onTap: () {
+                  setState(() => _batterySaverMode = !_batterySaverMode);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(_batterySaverMode ? 'Battery saver mode: updates every 30s' : 'Real-time mode: updates every 5s'),
+                      duration: const Duration(seconds: 2),
+                    ),
+                  );
+                },
+                child: _buildGpsChip(),
+              ),
             ),
         ],
       ),
@@ -749,7 +761,7 @@ class _TripScreenState extends State<TripScreen> {
                 ? 'GPS Searching'
                 : 'GPS Off'
             : fresh
-                ? 'GPS Active'
+                ? _batterySaverMode ? 'GPS Battery Saver' : 'GPS Active'
                 : 'GPS Stale';
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -760,7 +772,7 @@ class _TripScreenState extends State<TripScreen> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.location_on, color: AppColors.white, size: 14),
+              Icon(_batterySaverMode ? Icons.battery_saver : Icons.location_on, color: AppColors.white, size: 14),
               const SizedBox(width: 4),
               Text(
                 label,

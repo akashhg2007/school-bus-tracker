@@ -14,6 +14,9 @@ const AttendanceReports: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [useDateFilter, setUseDateFilter] = useState(false);
 
   useEffect(() => {
     loadAttendance();
@@ -21,7 +24,13 @@ const AttendanceReports: React.FC = () => {
 
   const loadAttendance = async () => {
     try {
-      const response = await api.get('/attendance', { params: { page, limit: 20 } });
+      setIsLoading(true);
+      let response;
+      if (useDateFilter && startDate && endDate) {
+        response = await api.get('/attendance/report', { params: { startDate, endDate, page, limit: 20 } });
+      } else {
+        response = await api.get('/attendance', { params: { page, limit: 20 } });
+      }
       const data = unwrapList(response.data);
       if (page === 1) {
         setAttendance(data);
@@ -33,6 +42,19 @@ const AttendanceReports: React.FC = () => {
       console.error('Error loading attendance:', error);
     }
     setIsLoading(false);
+  };
+
+  const handleDateFilter = () => {
+    setPage(1);
+    loadAttendance();
+  };
+
+  const clearDateFilter = () => {
+    setStartDate('');
+    setEndDate('');
+    setUseDateFilter(false);
+    setPage(1);
+    setTimeout(() => loadAttendance(), 0);
   };
 
   const getTypeColor = (type: string) => {
@@ -58,6 +80,21 @@ const AttendanceReports: React.FC = () => {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-gray-800">Attendance Reports</h1>
+
+      <div className="bg-white rounded-lg shadow p-4">
+        <div className="flex flex-wrap items-end gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+            <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+            <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <button onClick={() => { setUseDateFilter(true); handleDateFilter(); }} disabled={!startDate || !endDate} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">Filter</button>
+          {useDateFilter && <button onClick={clearDateFilter} className="px-4 py-2 text-gray-600 hover:text-gray-800">Clear</button>}
+        </div>
+      </div>
 
       <div className="bg-white rounded-lg shadow overflow-hidden">
         <table className="min-w-full divide-y divide-gray-200">

@@ -41,18 +41,18 @@ const Layout: React.FC = () => {
     <div className={`min-h-screen ${darkMode ? 'bg-gray-900' : 'bg-gray-100'}`}>
       {/* Sidebar */}
       <div
-        className={`fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out ${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}
+        className={`fixed inset-y-0 left-0 z-50 w-64 shadow-lg transform transition-transform duration-300 ease-in-out ${
+          darkMode ? 'bg-gray-800' : 'bg-white'
+        } ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
       >
-        <div className="flex items-center justify-center h-16 border-b border-gray-200">
+        <div className={`flex items-center justify-center h-16 border-b ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
           <div className="flex items-center space-x-2">
             <div className="p-2 bg-blue-600 rounded-lg">
               <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
               </svg>
             </div>
-            <span className="text-xl font-bold text-gray-800">Bus Tracker</span>
+            <span className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-800'}`}>Bus Tracker</span>
           </div>
         </div>
 
@@ -63,13 +63,13 @@ const Layout: React.FC = () => {
               to={item.path}
               className={`flex items-center px-4 py-3 mb-2 rounded-lg transition-colors ${
                 location.pathname === item.path
-                  ? 'bg-blue-50 text-blue-600'
-                  : 'text-gray-600 hover:bg-gray-50'
+                  ? 'bg-blue-50 text-blue-600 dark:bg-blue-900 dark:text-blue-400'
+                  : darkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-50'
               }`}
             >
               <svg
                 className={`w-5 h-5 mr-3 ${
-                  location.pathname === item.path ? 'text-blue-600' : 'text-gray-400'
+                  location.pathname === item.path ? 'text-blue-600 dark:text-blue-400' : darkMode ? 'text-gray-400' : 'text-gray-400'
                 }`}
                 fill="none"
                 stroke="currentColor"
@@ -86,22 +86,22 @@ const Layout: React.FC = () => {
       {/* Main Content */}
       <div className={`transition-all duration-300 ${sidebarOpen ? 'ml-64' : 'ml-0'}`}>
         {/* Header */}
-        <header className="bg-white shadow-sm h-16 flex items-center justify-between px-6">
+        <header className={`${darkMode ? 'bg-gray-800' : 'bg-white'} shadow-sm h-16 flex items-center justify-between px-6`}>
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="p-2 rounded-lg hover:bg-gray-100"
+            className={`p-2 rounded-lg ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}
           >
-            <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className={`w-6 h-6 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
 
           <div className="flex items-center space-x-4">
-            <button onClick={toggleDarkMode} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700" title="Toggle dark mode">
+            <button onClick={toggleDarkMode} className={`p-2 rounded-lg ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`} title="Toggle dark mode">
               {darkMode ? '☀️' : '🌙'}
             </button>
-            <button className="p-2 rounded-lg hover:bg-gray-100 relative">
-              <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <button className={`p-2 rounded-lg relative ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}>
+              <svg className={`w-6 h-6 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
               </svg>
               <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
@@ -114,17 +114,17 @@ const Layout: React.FC = () => {
                 </span>
               </div>
               <div className="hidden md:block">
-                <p className="text-sm font-medium text-gray-800">{user?.name}</p>
-                <p className="text-xs text-gray-500">Admin</p>
+                <p className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-800'}`}>{user?.name}</p>
+                <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Admin</p>
               </div>
             </div>
 
             <button
               onClick={handleLogout}
-              className="p-2 rounded-lg hover:bg-gray-100"
+              className={`p-2 rounded-lg ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}
               title="Logout"
             >
-              <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className={`w-5 h-5 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
               </svg>
             </button>

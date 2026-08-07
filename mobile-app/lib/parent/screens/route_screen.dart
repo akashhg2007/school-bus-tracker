@@ -34,10 +34,14 @@ class _RouteViewState extends State<RouteView> {
   }
 
   Future<void> _getUserLocation() async {
-    final location = await LocationService().getCurrentLatLng();
-    if (location != null && mounted) {
-      setState(() => _userLocation = location);
-      if (_stops.isEmpty) _moveCamera(location, 15);
+    try {
+      final location = await LocationService().getCurrentLatLng();
+      if (location != null && mounted) {
+        setState(() => _userLocation = location);
+        if (_stops.isEmpty) _moveCamera(location, 15);
+      }
+    } catch (e) {
+      debugPrint('Error getting location: $e');
     }
   }
 
@@ -66,6 +70,11 @@ class _RouteViewState extends State<RouteView> {
       }
     } catch (e) {
       setState(() => _loading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load route: $e')),
+        );
+      }
     }
   }
 

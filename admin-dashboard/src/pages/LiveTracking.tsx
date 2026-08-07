@@ -46,6 +46,7 @@ const LiveTracking: React.FC = () => {
   const [buses, setBuses] = useState<Record<string, BusLocation>>({});
   const [selectedBus, setSelectedBus] = useState<BusLocation | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [emergencyAlert, setEmergencyAlert] = useState<{ message: string; busNumber?: string; studentName?: string; timestamp: string } | null>(null);
   const socketRef = useRef<Socket | null>(null);
 
   const defaultCenter: [number, number] = [12.9716, 77.5946];
@@ -169,6 +170,23 @@ const LiveTracking: React.FC = () => {
             };
           });
         });
+
+        socket.on('fleet:emergency-alert', (data: { message: string; busNumber?: string; studentName?: string; tripId?: string; busId?: string; timestamp?: string }) => {
+          setEmergencyAlert({
+            message: data.message || 'Emergency alert received',
+            busNumber: data.busNumber,
+            studentName: data.studentName,
+            timestamp: data.timestamp || new Date().toISOString(),
+          });
+          if (data.busId) {
+            setBuses((prev) => {
+              const existing = prev[data.busId!];
+              if (!existing) return prev;
+              return { ...prev, [data.busId!]: { ...existing, status: 'ON_ROUTE' } };
+            });
+          }
+          setTimeout(() => setEmergencyAlert(null), 15000);
+        });
       } catch (error) {
         console.error('Error connecting socket:', error);
       }
@@ -208,6 +226,25 @@ const LiveTracking: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {emergencyAlert && (
+        <div className="bg-red-600 text-white p-4 rounded-lg shadow-lg flex items-center justify-between animate-pulse">
+          <div className="flex items-center space-x-3">
+            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            </svg>
+            <div>
+              <p className="font-bold text-lg">EMERGENCY ALERT</p>
+              <p className="text-sm">{emergencyAlert.message}{emergencyAlert.busNumber ? ` — Bus ${emergencyAlert.busNumber}` : ''}{emergencyAlert.studentName ? ` (${emergencyAlert.studentName})` : ''}</p>
+            </div>
+          </div>
+          <button onClick={() => setEmergencyAlert(null)} className="text-white hover:text-red-200">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
+
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold text-gray-800">Live Bus Tracking</h1>
         <div className="flex items-center space-x-2">

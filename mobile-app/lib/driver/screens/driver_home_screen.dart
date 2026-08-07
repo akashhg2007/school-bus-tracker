@@ -35,7 +35,33 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
       }
     } catch (e) {
       setState(() => _loading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load profile: $e')),
+        );
+      }
     }
+  }
+
+  void _confirmLogout() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Logout'),
+        content: const Text('Are you sure you want to logout?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              AuthService().logout();
+              Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => LoginScreen()));
+            },
+            child: const Text('Logout', style: TextStyle(color: AppColors.dangerRed)),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -47,10 +73,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.logout),
-            onPressed: () {
-              auth.logout();
-              Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => LoginScreen()));
-            },
+            onPressed: _confirmLogout,
           ),
         ],
       ),
@@ -123,6 +146,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
   }
 
   Widget _buildProfileTab() {
+    final bus = _profile?['bus'];
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -134,11 +158,9 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
           const SizedBox(height: 8),
           Text(_profile?['phone'] ?? '', style: const TextStyle(color: AppColors.medium)),
           const SizedBox(height: 32),
-          _buildProfileMenuItem(icon: Icons.directions_bus, title: 'My Bus', onTap: () {}),
-          _buildProfileMenuItem(icon: Icons.logout, title: 'Logout', color: AppColors.dangerRed, onTap: () {
-            AuthService().logout();
-            Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => LoginScreen()));
-          }),
+          if (bus != null)
+            _buildProfileMenuItem(icon: Icons.directions_bus, title: 'My Bus: ${bus['busNumber'] ?? ''}', onTap: () {}),
+          _buildProfileMenuItem(icon: Icons.logout, title: 'Logout', color: AppColors.dangerRed, onTap: _confirmLogout),
         ],
       ),
     );

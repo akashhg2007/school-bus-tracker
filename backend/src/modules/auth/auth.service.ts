@@ -155,3 +155,31 @@ export const updateFcmToken = async (userId: string, userType: string, fcmToken:
     });
   }
 };
+
+export const getMe = async (userId: string, userType: string) => {
+  if (userType === 'PARENT') {
+    const parent = await prisma.parent.findUnique({
+      where: { id: userId },
+      include: { school: true },
+    });
+    if (!parent) throw new NotFoundError('Parent not found');
+    return { id: parent.id, name: parent.name, phone: parent.phone, email: parent.email, userType: 'PARENT' as const, schoolId: parent.schoolId, schoolName: parent.school?.name };
+  }
+  if (userType === 'DRIVER') {
+    const driver = await prisma.driver.findUnique({
+      where: { id: userId },
+      include: { school: true, bus: true },
+    });
+    if (!driver) throw new NotFoundError('Driver not found');
+    return { id: driver.id, name: driver.name, phone: driver.phone, email: driver.email, userType: 'DRIVER' as const, schoolId: driver.schoolId, schoolName: driver.school?.name, bus: driver.bus ? { id: driver.bus.id, busNumber: driver.bus.busNumber, plateNumber: driver.bus.plateNumber } : null };
+  }
+  if (userType === 'ADMIN') {
+    const admin = await prisma.admin.findUnique({
+      where: { id: userId },
+      include: { school: true },
+    });
+    if (!admin) throw new NotFoundError('Admin not found');
+    return { id: admin.id, name: admin.name, phone: admin.phone, email: admin.email, userType: 'ADMIN' as const, schoolId: admin.schoolId, schoolName: admin.school?.name };
+  }
+  throw new NotFoundError('User not found');
+};
