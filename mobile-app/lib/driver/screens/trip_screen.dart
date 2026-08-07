@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -30,6 +31,8 @@ class _TripScreenState extends State<TripScreen> {
   bool _loading = true;
   LatLng? _currentLocation;
   bool _permissionGranted = false;
+  bool _followGps = true;
+  StreamSubscription? _gpsSubscription;
 
   @override
   void initState() {
@@ -37,14 +40,45 @@ class _TripScreenState extends State<TripScreen> {
     _loadStudents();
     _connectSocket();
     _requestLocationPermission();
+    _listenGps();
   }
 
   @override
   void dispose() {
+    _gpsSubscription?.cancel();
     if (_isTripActive) {
       _locationService.stopTracking();
     }
     super.dispose();
+  }
+
+  void _listenGps() {
+    _gpsSubscription = _locationService.statusStream.listen((status) {
+      if (!mounted) return;
+      final lat = status['latitude'];
+      final lng = status['longitude'];
+      if (lat == null || lng == null) return;
+      final pos = LatLng(lat.toDouble(), lng.toDouble());
+      setState(() => _currentLocation = pos);
+      if (_followGps) _moveCamera(pos);
+    });
+  }
+
+  void _moveCamera(LatLng pos) {
+    try {
+      _mapController.move(pos, _mapController.camera.zoom);
+    } catch (_) {
+      _mapController.move(pos, 16);
+    }
+  }
+
+  void _recenterToMyLocation() {
+    if (_currentLocation == null) {
+      _requestLocationPermission();
+      return;
+    }
+    setState(() => _followGps = true);
+    _moveCamera(_currentLocation!);
   }
 
   void _connectSocket() {
@@ -69,6 +103,7 @@ class _TripScreenState extends State<TripScreen> {
       setState(() {
         _currentLocation = LatLng(position.latitude, position.longitude);
       });
+      _recenterToMyLocation();
     }
   }
 
@@ -323,6 +358,14 @@ class _TripScreenState extends State<TripScreen> {
                         center: _currentLocation ?? const LatLng(12.9716, 77.5946),
                         zoom: 15.0,
                         controller: _mapController,
+                        onMapEvent: (event) {
+                          if (event.source == MapEventSource.onDrag ||
+                              event.source == MapEventSource.onMultiFinger ||
+                              event.source == MapEventSource.multiFingerGestureStart ||
+                              event.source == MapEventSource.flingAnimationController) {
+                            if (_followGps && mounted) setState(() => _followGps = false);
+                          }
+                        },
                         markers: [
                           if (_currentLocation != null)
                             buildBusMarker(_currentLocation!, 90, widget.busNumber ?? 'BUS', true),
@@ -396,6 +439,16 @@ class _TripScreenState extends State<TripScreen> {
                             ),
                           ),
                         ),
+                      Positioned(
+                        right: 12,
+                        top: 12,
+                        child: FloatingActionButton.small(
+                          heroTag: 'locate_me',
+                          backgroundColor: AppColors.skyBlue,
+                          onPressed: _recenterToMyLocation,
+                          child: const Icon(Icons.my_location, color: AppColors.white),
+                        ),
+                      ),
                     ],
                   ),
                 ),

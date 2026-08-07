@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:latlong2/latlong.dart';
 import 'socket_service.dart';
 import '../config/app_config.dart';
 
@@ -79,6 +80,12 @@ class LocationService {
       debugPrint('Error getting current position: $e');
       return null;
     }
+  }
+
+  Future<LatLng?> getCurrentLatLng() async {
+    final position = await getCurrentPosition();
+    if (position == null) return null;
+    return LatLng(position.latitude, position.longitude);
   }
 
   Future<void> startTracking(String tripId, {String? busId}) async {

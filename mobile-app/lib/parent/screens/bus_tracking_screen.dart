@@ -4,6 +4,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../../core/config/theme.dart';
 import '../../core/services/api_service.dart';
+import '../../core/services/location_service.dart';
 import '../../core/services/socket_service.dart';
 import '../../shared/map/osm_map_widget.dart';
 
@@ -22,6 +23,8 @@ class _BusTrackingScreenState extends State<BusTrackingScreen> {
   final SocketService _socketService = SocketService();
   final LatLng _defaultLocation = const LatLng(12.9716, 77.5946);
   LatLng? _busLocation;
+  LatLng? _userLocation;
+  bool _followGps = true;
   List<Map<String, dynamic>> _stops = [];
   String? _driverName;
   String? _nextStopName;
@@ -37,6 +40,30 @@ class _BusTrackingScreenState extends State<BusTrackingScreen> {
     super.initState();
     _loadBusData();
     _connectSocket();
+    _getUserLocation();
+  }
+
+  Future<void> _getUserLocation() async {
+    final location = await LocationService().getCurrentLatLng();
+    if (location != null && mounted) {
+      setState(() => _userLocation = location);
+      if (_busLocation == null) {
+        _moveCamera(location, 15);
+      }
+    }
+  }
+
+  void _moveCamera(LatLng pos, double zoom) {
+    try {
+      _mapController.move(pos, zoom);
+    } catch (_) {}
+  }
+
+  void _recenter() {
+    final target = _busLocation ?? _userLocation;
+    if (target == null) return;
+    setState(() => _followGps = true);
+    _moveCamera(target, 16);
   }
 
   @override
@@ -72,7 +99,7 @@ class _BusTrackingScreenState extends State<BusTrackingScreen> {
               _nextStopEta = null;
             }
           });
-          _mapController.move(_busLocation!, _mapController.camera.zoom);
+          if (_followGps) _moveCamera(LatLng(lat.toDouble(), lng.toDouble()), 15);
         }
       }
     });
@@ -166,9 +193,17 @@ class _BusTrackingScreenState extends State<BusTrackingScreen> {
                   child: Stack(
                     children: [
                       OsmMapWidget(
-                        center: _busLocation ?? _defaultLocation,
+                        center: _busLocation ?? _userLocation ?? _defaultLocation,
                         zoom: 15.0,
                         controller: _mapController,
+                        onMapEvent: (event) {
+                          if (event.source == MapEventSource.onDrag ||
+                              event.source == MapEventSource.onMultiFinger ||
+                              event.source == MapEventSource.multiFingerGestureStart ||
+                              event.source == MapEventSource.flingAnimationController) {
+                            if (_followGps && mounted) setState(() => _followGps = false);
+                          }
+                        },
                         polylines: [
                           if (_stops.length > 1)
                             Polyline(
@@ -186,7 +221,8 @@ class _BusTrackingScreenState extends State<BusTrackingScreen> {
                         markers: [
                           if (_busLocation != null)
                             buildBusMarker(_busLocation!, 90, widget.busNumber ?? 'BUS', true),
-                          buildParentMarker(_defaultLocation, 'Home'),
+                          if (_userLocation != null)
+                            buildParentMarker(_userLocation!, 'You'),
                           for (final stop in _stops)
                             if (stop['latitude'] != null && stop['longitude'] != null)
                               buildStopMarker(
@@ -198,6 +234,16 @@ class _BusTrackingScreenState extends State<BusTrackingScreen> {
                                 false,
                               ),
                         ],
+                      ),
+                      Positioned(
+                        right: 12,
+                        top: 12,
+                        child: FloatingActionButton.small(
+                          heroTag: 'locate_bus',
+                          backgroundColor: AppColors.skyBlue,
+                          onPressed: _recenter,
+                          child: const Icon(Icons.my_location, color: AppColors.white),
+                        ),
                       ),
                       Positioned(
                         bottom: 16,

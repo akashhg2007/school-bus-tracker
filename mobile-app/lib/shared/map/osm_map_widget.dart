@@ -12,6 +12,7 @@ class OsmMapWidget extends StatelessWidget {
   final MapController? controller;
   final bool showMyLocation;
   final Function(TapPosition, LatLng)? onTap;
+  final void Function(MapEvent)? onMapEvent;
 
   const OsmMapWidget({
     super.key,
@@ -22,6 +23,7 @@ class OsmMapWidget extends StatelessWidget {
     this.controller,
     this.showMyLocation = false,
     this.onTap,
+    this.onMapEvent,
   });
 
   @override
@@ -32,6 +34,7 @@ class OsmMapWidget extends StatelessWidget {
         initialCenter: center,
         initialZoom: zoom,
         onTap: onTap != null ? (tapPos, latLng) => onTap!(tapPos, latLng) : null,
+        onMapEvent: onMapEvent,
       ),
       children: [
         TileLayer(

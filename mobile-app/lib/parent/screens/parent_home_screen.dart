@@ -4,6 +4,7 @@ import 'package:latlong2/latlong.dart';
 import '../../core/config/theme.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/auth_service.dart';
+import '../../core/services/location_service.dart';
 import '../../core/services/socket_service.dart';
 import '../../shared/map/osm_map_widget.dart';
 import '../../shared/screens/login_screen.dart';
@@ -24,6 +25,7 @@ class _ParentHomeScreenState extends State<ParentHomeScreen> {
   int _currentIndex = 0;
   final MapController _mapController = MapController();
   final LatLng _defaultLocation = const LatLng(12.9716, 77.5946);
+  LatLng? _userLocation;
   List<Map<String, dynamic>> _children = [];
   bool _loading = true;
 
@@ -31,6 +33,14 @@ class _ParentHomeScreenState extends State<ParentHomeScreen> {
   void initState() {
     super.initState();
     _loadChildren();
+    _getUserLocation();
+  }
+
+  Future<void> _getUserLocation() async {
+    final location = await LocationService().getCurrentLatLng();
+    if (location != null && mounted) {
+      setState(() => _userLocation = location);
+    }
   }
 
   Future<void> _loadChildren() async {
@@ -133,7 +143,15 @@ class _ParentHomeScreenState extends State<ParentHomeScreen> {
             clipBehavior: Clip.antiAlias,
             child: SizedBox(
               height: 200,
-              child: OsmMapWidget(center: _defaultLocation, zoom: 13.0, controller: _mapController),
+              child: OsmMapWidget(
+                center: _userLocation ?? _defaultLocation,
+                zoom: 13.0,
+                controller: _mapController,
+                markers: [
+                  if (_userLocation != null)
+                    buildParentMarker(_userLocation!, 'You'),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 16),

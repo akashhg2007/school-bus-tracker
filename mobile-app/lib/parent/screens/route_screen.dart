@@ -4,6 +4,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/config/theme.dart';
 import '../../core/services/api_service.dart';
+import '../../core/services/location_service.dart';
 import '../../shared/map/osm_map_widget.dart';
 
 class RouteView extends StatefulWidget {
@@ -19,6 +20,7 @@ class RouteView extends StatefulWidget {
 class _RouteViewState extends State<RouteView> {
   final MapController _mapController = MapController();
   final LatLng _defaultLocation = const LatLng(12.9716, 77.5946);
+  LatLng? _userLocation;
   List<Map<String, dynamic>> _stops = [];
   String? _driverName;
   String? _driverPhone;
@@ -28,6 +30,21 @@ class _RouteViewState extends State<RouteView> {
   void initState() {
     super.initState();
     _loadRoute();
+    _getUserLocation();
+  }
+
+  Future<void> _getUserLocation() async {
+    final location = await LocationService().getCurrentLatLng();
+    if (location != null && mounted) {
+      setState(() => _userLocation = location);
+      if (_stops.isEmpty) _moveCamera(location, 15);
+    }
+  }
+
+  void _moveCamera(LatLng pos, double zoom) {
+    try {
+      _mapController.move(pos, zoom);
+    } catch (_) {}
   }
 
   Future<void> _loadRoute() async {
@@ -98,6 +115,8 @@ class _RouteViewState extends State<RouteView> {
                           ),
                       ],
                       markers: [
+                        if (_userLocation != null)
+                          buildParentMarker(_userLocation!, 'You'),
                         for (final stop in _stops)
                           if (stop['latitude'] != null && stop['longitude'] != null)
                             buildStopMarker(
