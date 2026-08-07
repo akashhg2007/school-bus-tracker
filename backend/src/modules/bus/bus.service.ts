@@ -94,13 +94,40 @@ export const createBus = async (data: CreateBusInput) => {
   return bus;
 };
 
-export const getBusesBySchool = async (schoolId: string, page: number = 1, limit: number = 10) => {
-  const { page: p, limit: l } = sanitizePagination(page, limit);
-  const skip = (p - 1) * l;
+export const getBusesBySchool = async (
+  schoolId: string,
+  page: number = 1,
+  limit: number = 10,
+  filters: { search?: string; isActive?: boolean; driverAssigned?: boolean } = {},
+  sort: { field?: string; direction?: 'asc' | 'desc' } = {}
+) => {
+  const { page: p, limit: l, skip } = sanitizePagination(page, limit);
+
+  const where: any = { schoolId };
+  if (filters.isActive !== undefined) where.isActive = filters.isActive;
+  else where.isActive = true;
+
+  if (filters.search) {
+    where.OR = [
+      { busNumber: { contains: filters.search, mode: 'insensitive' } },
+      { plateNumber: { contains: filters.search, mode: 'insensitive' } },
+    ];
+  }
+
+  if (filters.driverAssigned === true) {
+    where.driverId = { not: null };
+  } else if (filters.driverAssigned === false) {
+    where.driverId = null;
+  }
+
+  const orderBy: any = {};
+  const sortField = sort.field || 'createdAt';
+  const sortDir = sort.direction || 'desc';
+  orderBy[sortField] = sortDir;
 
   const [buses, total] = await Promise.all([
     prisma.bus.findMany({
-      where: { schoolId, isActive: true },
+      where,
       include: {
         driver: {
           select: { id: true, name: true, phone: true },
@@ -112,9 +139,9 @@ export const getBusesBySchool = async (schoolId: string, page: number = 1, limit
       },
       skip,
       take: l,
-      orderBy: { createdAt: 'desc' },
+      orderBy,
     }),
-    prisma.bus.count({ where: { schoolId, isActive: true } }),
+    prisma.bus.count({ where }),
   ]);
 
   return { buses, total, page: p, limit: l };

@@ -12,7 +12,6 @@ interface User {
 
 interface AuthContextType {
   user: User | null;
-  token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (identifier: string, password: string) => Promise<{ success: boolean; error?: string }>;
@@ -31,25 +30,25 @@ export const useAuth = () => {
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    try {
-      const storedToken = localStorage.getItem('token');
-      const storedUser = localStorage.getItem('user');
-
-      if (storedToken && storedUser) {
-        const parsedUser = JSON.parse(storedUser);
-        setToken(storedToken);
-        setUser(parsedUser);
+    const checkAuth = async () => {
+      try {
+        // Try to get user profile from server using httpOnly cookie
+        const response = await api.get('/auth/me');
+        if (response.data?.data) {
+          setUser(response.data.data);
+        }
+      } catch (error) {
+        // Not authenticated - no valid cookie
+        setUser(null);
+      } finally {
+        setIsLoading(false);
       }
-    } catch (error) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-    } finally {
-      setIsLoading(false);
-    }
+    };
+
+    checkAuth();
   }, []);
 
   const login = async (identifier: string, password: string): Promise<{ success: boolean; error?: string }> => {
@@ -69,17 +68,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           userType: data.user.userType,
         };
 
-        setToken(data.token);
         setUser(userData);
-
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('user', JSON.stringify(userData));
-
         return { success: true };
       }
       return { success: false, error: 'Login failed' };
     } catch (error: any) {
-      const msg = error?.response?.data?.message || error?.message || 'Login failed';
+      const msg = error?.response?.data?.error?.message || error?.response?.data?.message || error?.message || 'Login failed';
       if (msg.includes('not found') || msg.includes('No account')) {
         return { success: false, error: 'No account found with this email or phone number.' };
       }
@@ -89,25 +83,29 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (msg.includes('not activated')) {
         return { success: false, error: 'Account not activated. Please contact your school admin.' };
       }
+      if (msg.includes('locked')) {
+        return { success: false, error: 'Account temporarily locked due to too many failed attempts.' };
+      }
       return { success: false, error: 'Login failed. Please try again.' };
     } finally {
       setIsLoading(false);
     }
   };
 
-  const logout = () => {
-    setToken(null);
+  const logout = async () => {
+    try {
+      await api.post('/auth/logout');
+    } catch (error) {
+      // Ignore errors - clear state anyway
+    }
     setUser(null);
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
   };
 
   return (
     <AuthContext.Provider
       value={{
         user,
-        token,
-        isAuthenticated: !!token && !!user,
+        isAuthenticated: !!user,
         isLoading,
         login,
         logout,

@@ -26,9 +26,19 @@ export const getDrivers = async (req: Request, res: Response, next: NextFunction
     const schoolId = req.user!.schoolId;
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 10;
+    const { search, isActive, hasBus } = req.query;
+    const sortField = req.query.sort as string;
+    const sortDir = (req.query.dir as 'asc' | 'desc') || 'desc';
 
-    const result = await driverService.getDriversBySchool(schoolId, page, limit);
-    sendSuccess(res, 'Drivers retrieved successfully', result);
+    const result = await driverService.getDriversBySchool(schoolId, page, limit, {
+      search: search as string,
+      isActive: isActive !== undefined ? isActive === 'true' : undefined,
+      hasBus: hasBus !== undefined ? hasBus === 'true' : undefined,
+    }, {
+      field: sortField || 'createdAt',
+      direction: sortDir,
+    });
+    sendSuccess(res, result);
   } catch (error) {
     next(error);
   }

@@ -1,193 +1,137 @@
 import React, { useState, useEffect } from 'react';
 import api, { unwrapList } from '../services/api';
+import PageHeader from '../components/ui/PageHeader';
+import Modal from '../components/ui/Modal';
+import Button from '../components/ui/Button';
+import EmptyState from '../components/ui/EmptyState';
+import LoadingSkeleton from '../components/ui/LoadingSkeleton';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
+import { useToast } from '../components/ui/Toast';
 
-interface Stop {
-  id: string;
-  name: string;
-  latitude: number;
-  longitude: number;
-  order: number;
-}
-
-interface Route {
-  id: string;
-  name: string;
-  stops: Stop[];
-  _count?: { buses: number };
-}
+interface Stop { id: string; name: string; latitude: number; longitude: number; order: number; }
+interface Route { id: string; name: string; stops: Stop[]; _count?: { buses: number }; }
 
 const RouteManagement: React.FC = () => {
+  const { toast } = useToast();
   const [routes, setRoutes] = useState<Route[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingRoute, setEditingRoute] = useState<Route | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Route | null>(null);
+  const [saving, setSaving] = useState(false);
   const [routeName, setRouteName] = useState('');
   const [stops, setStops] = useState<Array<{ name: string; latitude: number; longitude: number }>>([
     { name: '', latitude: 0, longitude: 0 },
     { name: '', latitude: 0, longitude: 0 },
   ]);
 
-  useEffect(() => {
-    loadRoutes();
-  }, []);
+  useEffect(() => { loadRoutes(); }, []);
 
   const loadRoutes = async () => {
-    try {
-      const response = await api.get('/routes');
-      setRoutes(unwrapList(response.data));
-    } catch (error) {
-      console.error('Error loading routes:', error);
-    }
+    try { const res = await api.get('/routes'); setRoutes(unwrapList(res.data)); }
+    catch { toast('error', 'Failed to load routes'); }
     setIsLoading(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSaving(true);
     try {
       if (editingRoute) {
         await api.put(`/routes/${editingRoute.id}`, { name: routeName });
+        toast('success', 'Route updated');
       } else {
         await api.post('/routes', { name: routeName, stops });
+        toast('success', 'Route created');
       }
-      setShowModal(false);
-      setEditingRoute(null);
-      setRouteName('');
-      setStops([{ name: '', latitude: 0, longitude: 0 }, { name: '', latitude: 0, longitude: 0 }]);
-      loadRoutes();
-    } catch (error) {
-      console.error('Error saving route:', error);
-    }
+      closeModal(); loadRoutes();
+    } catch { toast('error', 'Failed to save route'); }
+    setSaving(false);
   };
 
-  const handleEdit = (route: Route) => {
-    setEditingRoute(route);
-    setRouteName(route.name);
-    setShowModal(true);
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    try { await api.delete(`/routes/${deleteTarget.id}`); toast('success', 'Route deleted'); loadRoutes(); }
+    catch { toast('error', 'Failed to delete route'); }
+    setDeleteTarget(null);
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this route?')) return;
-    try {
-      await api.delete(`/routes/${id}`);
-      loadRoutes();
-    } catch (error) {
-      console.error('Error deleting route:', error);
-    }
-  };
+  const openAdd = () => { setEditingRoute(null); setRouteName(''); setStops([{ name: '', latitude: 0, longitude: 0 }, { name: '', latitude: 0, longitude: 0 }]); setShowModal(true); };
+  const openEdit = (r: Route) => { setEditingRoute(r); setRouteName(r.name); setShowModal(true); };
+  const closeModal = () => { setShowModal(false); setEditingRoute(null); };
+  const addStop = () => setStops([...stops, { name: '', latitude: 0, longitude: 0 }]);
+  const updateStop = (i: number, field: string, val: any) => { const n = [...stops]; (n[i] as any)[field] = field === 'name' ? val : parseFloat(val) || 0; setStops(n); };
+  const removeStop = (i: number) => { if (stops.length > 2) setStops(stops.filter((_, idx) => idx !== i)); };
 
-  const addStop = () => {
-    setStops([...stops, { name: '', latitude: 0, longitude: 0 }]);
-  };
-
-  const updateStop = (index: number, field: string, value: any) => {
-    const newStops = [...stops];
-    (newStops[index] as any)[field] = field === 'name' ? value : parseFloat(value) || 0;
-    setStops(newStops);
-  };
-
-  const removeStop = (index: number) => {
-    if (stops.length <= 2) return;
-    setStops(stops.filter((_, i) => i !== index));
-  };
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
+  if (isLoading) return <LoadingSkeleton />;
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-800">Route Management</h1>
-        <button
-          onClick={() => { setEditingRoute(null); setRouteName(''); setStops([{ name: '', latitude: 0, longitude: 0 }, { name: '', latitude: 0, longitude: 0 }]); setShowModal(true); }}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
-        >
-          + Add Route
-        </button>
-      </div>
+    <div className="space-y-6 animate-fade-in">
+      <PageHeader title="Route Management" actions={<Button size="sm" onClick={openAdd}>+ Add Route</Button>} />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {routes.map((route) => (
-          <div key={route.id} className="bg-white rounded-lg shadow p-6">
-            <div className="flex justify-between items-start mb-4">
-              <h3 className="text-lg font-semibold">{route.name}</h3>
-              <div className="space-x-2">
-                <button onClick={() => handleEdit(route)} className="text-blue-600 hover:text-blue-800 text-sm">Edit</button>
-                <button onClick={() => handleDelete(route.id)} className="text-red-600 hover:text-red-800 text-sm">Delete</button>
+      {routes.length === 0 ? (
+        <EmptyState title="No routes yet" description="Create your first route to start assigning buses." icon="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" action={<Button onClick={openAdd}>+ Add Route</Button>} />
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {routes.map((route) => (
+            <div key={route.id} className="bg-white dark:bg-gray-800 rounded-2xl p-6 border border-gray-100 dark:border-gray-700 hover:shadow-md transition-all duration-200">
+              <div className="flex justify-between items-start mb-3">
+                <h3 className="text-lg font-semibold text-gray-800 dark:text-white">{route.name}</h3>
+                <div className="flex gap-2">
+                  <button onClick={() => openEdit(route)} className="text-sm text-blue-600 dark:text-blue-400 font-medium">Edit</button>
+                  <button onClick={() => setDeleteTarget(route)} className="text-sm text-red-600 dark:text-red-400 font-medium">Delete</button>
+                </div>
+              </div>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">{route.stops?.length || 0} stops &middot; {route._count?.buses || 0} buses</p>
+              <div className="space-y-1.5">
+                {route.stops?.slice(0, 4).map((stop, idx) => (
+                  <div key={stop.id} className="flex items-center text-sm">
+                    <span className="w-5 h-5 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full flex items-center justify-center text-xs mr-2 flex-shrink-0">{idx + 1}</span>
+                    <span className="text-gray-700 dark:text-gray-300 truncate">{stop.name}</span>
+                  </div>
+                ))}
+                {(route.stops?.length || 0) > 4 && <p className="text-xs text-gray-400 dark:text-gray-500">+{(route.stops?.length || 0) - 4} more stops</p>}
               </div>
             </div>
-            <div className="text-sm text-gray-500 mb-2">
-              {route.stops?.length || 0} stops | {route._count?.buses || 0} buses
-            </div>
-            <div className="space-y-1">
-              {route.stops?.slice(0, 4).map((stop, idx) => (
-                <div key={stop.id} className="flex items-center text-sm">
-                  <span className="w-5 h-5 bg-gray-200 rounded-full flex items-center justify-center text-xs mr-2">
-                    {idx + 1}
-                  </span>
-                  {stop.name}
+          ))}
+        </div>
+      )}
+
+      <Modal isOpen={showModal} onClose={closeModal} title={editingRoute ? 'Edit Route' : 'Add Route'} maxWidth="max-w-lg">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Route Name</label>
+            <input type="text" value={routeName} onChange={(e) => setRouteName(e.target.value)} className="w-full border border-gray-200 dark:border-gray-600 rounded-xl px-3 py-2.5 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-white" required />
+          </div>
+          {!editingRoute && (
+            <>
+              <div className="flex justify-between items-center">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">Stops (min 2)</label>
+                <Button type="button" variant="ghost" size="sm" onClick={addStop}>+ Add Stop</Button>
+              </div>
+              {stops.map((stop, i) => (
+                <div key={i} className="border border-gray-200 dark:border-gray-600 rounded-xl p-3 space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-200">Stop {i + 1}</span>
+                    {stops.length > 2 && <button type="button" onClick={() => removeStop(i)} className="text-red-500 text-sm">Remove</button>}
+                  </div>
+                  <input type="text" placeholder="Stop name" value={stop.name} onChange={(e) => updateStop(i, 'name', e.target.value)} className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-white" required />
+                  <div className="grid grid-cols-2 gap-2">
+                    <input type="number" placeholder="Latitude" value={stop.latitude || ''} onChange={(e) => updateStop(i, 'latitude', e.target.value)} className="border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-white" step="any" required />
+                    <input type="number" placeholder="Longitude" value={stop.longitude || ''} onChange={(e) => updateStop(i, 'longitude', e.target.value)} className="border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-white" step="any" required />
+                  </div>
                 </div>
               ))}
-              {(route.stops?.length || 0) > 4 && (
-                <div className="text-xs text-gray-400">+{(route.stops?.length || 0) - 4} more stops</div>
-              )}
-            </div>
+            </>
+          )}
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="secondary" type="button" onClick={closeModal}>Cancel</Button>
+            <Button type="submit" loading={saving}>Save</Button>
           </div>
-        ))}
-      </div>
+        </form>
+      </Modal>
 
-      {routes.length === 0 && (
-        <div className="bg-white rounded-lg shadow p-6 text-center text-gray-500">
-          No routes found. Create your first route!
-        </div>
-      )}
-
-      {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-bold mb-4">{editingRoute ? 'Edit Route' : 'Add Route'}</h2>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Route Name</label>
-                <input type="text" value={routeName} onChange={(e) => setRouteName(e.target.value)} className="w-full border rounded-lg px-3 py-2" required />
-              </div>
-
-              {!editingRoute && (
-                <>
-                  <div className="flex justify-between items-center">
-                    <label className="block text-sm font-medium text-gray-700">Stops (min 2)</label>
-                    <button type="button" onClick={addStop} className="text-blue-600 text-sm">+ Add Stop</button>
-                  </div>
-                  {stops.map((stop, index) => (
-                    <div key={index} className="border rounded-lg p-3 space-y-2">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm font-medium">Stop {index + 1}</span>
-                        {stops.length > 2 && (
-                          <button type="button" onClick={() => removeStop(index)} className="text-red-500 text-sm">Remove</button>
-                        )}
-                      </div>
-                      <input type="text" placeholder="Stop name" value={stop.name} onChange={(e) => updateStop(index, 'name', e.target.value)} className="w-full border rounded px-3 py-1 text-sm" required />
-                      <div className="grid grid-cols-2 gap-2">
-                        <input type="number" placeholder="Latitude" value={stop.latitude || ''} onChange={(e) => updateStop(index, 'latitude', e.target.value)} className="border rounded px-3 py-1 text-sm" step="any" required />
-                        <input type="number" placeholder="Longitude" value={stop.longitude || ''} onChange={(e) => updateStop(index, 'longitude', e.target.value)} className="border rounded px-3 py-1 text-sm" step="any" required />
-                      </div>
-                    </div>
-                  ))}
-                </>
-              )}
-
-              <div className="flex justify-end space-x-2">
-                <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 border rounded-lg">Cancel</button>
-                <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg">Save</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog isOpen={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={handleDelete} title="Delete Route" message={`Delete route ${deleteTarget?.name}? Buses assigned to it will be unassigned.`} confirmLabel="Delete" />
     </div>
   );
 };

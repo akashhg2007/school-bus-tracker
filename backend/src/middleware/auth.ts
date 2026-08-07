@@ -54,15 +54,44 @@ export const isTokenRevoked = (token: string): boolean => revokedTokens.has(toke
 
 const JWT_ALGORITHM = 'HS256' as const;
 
+// Cookie configuration
+const isProduction = process.env.NODE_ENV === 'production';
+const COOKIE_NAME = 'sb_token';
+const COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: isProduction,
+  sameSite: isProduction ? 'none' as const : 'lax' as const,
+  path: '/',
+  maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+};
+
+export const setAuthCookie = (res: Response, token: string): void => {
+  res.cookie(COOKIE_NAME, token, COOKIE_OPTIONS);
+};
+
+export const clearAuthCookie = (res: Response): void => {
+  res.clearCookie(COOKIE_NAME, { path: '/' });
+};
+
 export const authenticate = (req: Request, res: Response, next: NextFunction): void => {
   try {
-    const authHeader = req.headers.authorization;
+    let token: string | null = null;
 
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    // 1. Check Authorization header first (for API/mobile clients)
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.split(' ')[1];
+    }
+
+    // 2. Fall back to httpOnly cookie (for web dashboard)
+    if (!token && req.cookies?.[COOKIE_NAME]) {
+      token = req.cookies[COOKIE_NAME];
+    }
+
+    if (!token) {
       throw new UnauthorizedError('No token provided');
     }
 
-    const token = authHeader.split(' ')[1];
     const decoded = jwt.verify(token, getJwtSecret(), { algorithms: [JWT_ALGORITHM] }) as AuthPayload;
 
     if (isTokenRevoked(token)) {

@@ -5,6 +5,7 @@ import { handleTripEvents } from './handlers/trip.handler';
 import { handleAttendanceEvents, handleEmergency } from './handlers/attendance.handler';
 import { verifyToken, AuthPayload } from '../middleware/auth';
 import { logger } from '../utils/logger';
+import cookieParser from 'cookie-parser';
 
 let io: Server;
 
@@ -36,11 +37,41 @@ setInterval(() => {
   }
 }, 60 * 1000);
 
+// Parse token from auth header or cookie
+const extractToken = (socket: Socket): string | null => {
+  // 1. Check auth.token (mobile clients)
+  if (socket.handshake.auth?.token) {
+    return socket.handshake.auth.token;
+  }
+
+  // 2. Check Authorization header
+  const authHeader = socket.handshake.headers?.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    return authHeader.split(' ')[1];
+  }
+
+  // 3. Check cookie (web dashboard)
+  const cookieHeader = socket.handshake.headers?.cookie;
+  if (cookieHeader) {
+    const cookies: Record<string, string> = {};
+    cookieHeader.split(';').forEach((c) => {
+      const [key, ...rest] = c.trim().split('=');
+      cookies[key] = rest.join('=');
+    });
+    if (cookies.sb_token) {
+      return cookies.sb_token;
+    }
+  }
+
+  return null;
+};
+
 export const initializeSocket = (httpServer: HttpServer): Server => {
   io = new Server(httpServer, {
     cors: {
       origin: allowedSocketOrigins.length > 0 ? allowedSocketOrigins : undefined,
       methods: ['GET', 'POST'],
+      credentials: true,
     },
     maxHttpBufferSize: 64 * 1024,
     pingTimeout: 30000,
@@ -48,7 +79,7 @@ export const initializeSocket = (httpServer: HttpServer): Server => {
   });
 
   io.use((socket: Socket, next) => {
-    const token = socket.handshake.auth?.token;
+    const token = extractToken(socket);
     if (!token) {
       return next(new Error('Authentication required'));
     }

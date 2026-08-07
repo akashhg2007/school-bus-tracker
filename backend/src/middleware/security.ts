@@ -6,7 +6,7 @@ import { randomUUID } from 'crypto';
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
-  message: 'Too many authentication attempts, please try again later.',
+  message: { success: false, error: { code: 'RATE_LIMITED', message: 'Too many authentication attempts, please try again later.' } },
   standardHeaders: true,
   legacyHeaders: false,
   validate: { xForwardedForHeader: false },
@@ -16,7 +16,7 @@ const authLimiter = rateLimit({
 const otpLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 5,
-  message: 'Too many OTP requests, please try again later.',
+  message: { success: false, error: { code: 'RATE_LIMITED', message: 'Too many OTP requests, please try again later.' } },
   standardHeaders: true,
   legacyHeaders: false,
   validate: { xForwardedForHeader: false },
@@ -25,11 +25,22 @@ const otpLimiter = rateLimit({
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 500,
-  message: 'Too many requests, please try again later.',
+  message: { success: false, error: { code: 'RATE_LIMITED', message: 'Too many requests, please try again later.' } },
   standardHeaders: true,
   legacyHeaders: false,
   validate: { xForwardedForHeader: false },
   skip: (req) => req.path === '/health',
+});
+
+// Strict limiter for location updates (1 per 5 seconds per user)
+const locationLimiter = rateLimit({
+  windowMs: 5 * 1000,
+  max: 1,
+  message: { success: false, error: { code: 'RATE_LIMITED', message: 'Location update too frequent.' } },
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: { xForwardedForHeader: false },
+  keyGenerator: (req: any) => req.user?.id || req.ip,
 });
 
 const securityHeaders = helmet({
@@ -71,13 +82,20 @@ const corsOptions = cors({
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id'],
-  exposedHeaders: ['Content-Range', 'X-Total-Count', 'X-Request-Id'],
+  exposedHeaders: ['Content-Range', 'X-Total-Count', 'X-Request-Id', 'X-RateLimit-Limit', 'X-RateLimit-Remaining', 'X-RateLimit-Reset'],
   maxAge: 86400,
 });
 
 const cacheHeaders = (req: any, res: any, next: any) => {
   if (req.method === 'GET' && req.path.startsWith('/api')) {
-    res.set('Cache-Control', 'private, no-cache, no-store, must-revalidate');
+    // Cache static-ish data for 30s, dynamic data no-cache
+    const cacheablePaths = ['/buses', '/drivers', '/routes', '/students'];
+    const isCacheable = cacheablePaths.some(p => req.path === p || req.path === `${p}/`);
+    if (isCacheable) {
+      res.set('Cache-Control', 'private, max-age=30');
+    } else {
+      res.set('Cache-Control', 'private, no-cache, no-store, must-revalidate');
+    }
   }
   next();
 };
@@ -87,4 +105,4 @@ const requestId = (req: any, _res: any, next: any) => {
   next();
 };
 
-export { authLimiter, otpLimiter, generalLimiter, securityHeaders, corsOptions, requestId, cacheHeaders };
+export { authLimiter, otpLimiter, generalLimiter, locationLimiter, securityHeaders, corsOptions, requestId, cacheHeaders };
