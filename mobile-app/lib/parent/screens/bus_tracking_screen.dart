@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../../core/config/theme.dart';
+import '../../core/config/app_config.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/location_service.dart';
 import '../../core/services/socket_service.dart';
@@ -29,6 +30,8 @@ class _BusTrackingScreenState extends State<BusTrackingScreen> {
   String? _driverName;
   String? _nextStopName;
   int? _nextStopEta;
+  double? _nextStopDistance;
+  double? _busHeading;
   bool _loading = true;
   bool _isRealTimeActive = false;
   StreamSubscription? _locationSubscription;
@@ -91,12 +94,15 @@ class _BusTrackingScreenState extends State<BusTrackingScreen> {
           setState(() {
             _busLocation = LatLng(lat.toDouble(), lng.toDouble());
             _isRealTimeActive = true;
+            _busHeading = data['heading']?.toDouble();
             if (nextStop != null) {
               _nextStopName = nextStop['name'];
               _nextStopEta = nextStop['eta']?.round();
+              _nextStopDistance = nextStop['distance']?.toDouble();
             } else {
               _nextStopName = null;
               _nextStopEta = null;
+              _nextStopDistance = null;
             }
           });
           if (_followGps) _moveCamera(LatLng(lat.toDouble(), lng.toDouble()), 15);
@@ -194,8 +200,10 @@ class _BusTrackingScreenState extends State<BusTrackingScreen> {
                     children: [
                       OsmMapWidget(
                         center: _busLocation ?? _userLocation ?? _defaultLocation,
-                        zoom: 15.0,
+                        zoom: AppConfig.mapFollowZoom,
                         controller: _mapController,
+                        myLocation: _userLocation,
+                        myLocationAccuracy: null,
                         onMapEvent: (event) {
                           if (event.source == MapEventSource.onDrag ||
                               event.source == MapEventSource.onMultiFinger ||
@@ -220,7 +228,7 @@ class _BusTrackingScreenState extends State<BusTrackingScreen> {
                         ],
                         markers: [
                           if (_busLocation != null)
-                            buildBusMarker(_busLocation!, 90, widget.busNumber ?? 'BUS', true),
+                            buildBusMarker(_busLocation!, _busHeading ?? 0, widget.busNumber ?? 'BUS', true),
                           if (_userLocation != null)
                             buildParentMarker(_userLocation!, 'You'),
                           for (final stop in _stops)
@@ -281,7 +289,7 @@ class _BusTrackingScreenState extends State<BusTrackingScreen> {
                                       if (_nextStopName != null && _nextStopEta != null) ...[
                                         const SizedBox(height: 2),
                                         Text(
-                                          'Next stop: $_nextStopName (~$_nextStopEta min)',
+                                          'Next stop: $_nextStopName — ${_nextStopEta} min${_nextStopDistance != null ? ' · ${_nextStopDistance!.toStringAsFixed(1)} km' : ''}',
                                           style: const TextStyle(color: AppColors.alertOrange, fontSize: 12),
                                         ),
                                       ],

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../../core/config/theme.dart';
+import '../../core/config/app_config.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/location_service.dart';
 import '../../core/services/socket_service.dart';
@@ -33,6 +34,7 @@ class _TripScreenState extends State<TripScreen> {
   bool _permissionGranted = false;
   bool _followGps = true;
   StreamSubscription? _gpsSubscription;
+  Map<String, dynamic>? _gpsStatus;
 
   @override
   void initState() {
@@ -59,7 +61,10 @@ class _TripScreenState extends State<TripScreen> {
       final lng = status['longitude'];
       if (lat == null || lng == null) return;
       final pos = LatLng(lat.toDouble(), lng.toDouble());
-      setState(() => _currentLocation = pos);
+      setState(() {
+        _currentLocation = pos;
+        _gpsStatus = status;
+      });
       if (_followGps) _moveCamera(pos);
     });
   }
@@ -68,7 +73,7 @@ class _TripScreenState extends State<TripScreen> {
     try {
       _mapController.move(pos, _mapController.camera.zoom);
     } catch (_) {
-      _mapController.move(pos, 16);
+      _mapController.move(pos, AppConfig.mapFollowZoom);
     }
   }
 
@@ -356,8 +361,11 @@ class _TripScreenState extends State<TripScreen> {
                     children: [
                       OsmMapWidget(
                         center: _currentLocation ?? const LatLng(12.9716, 77.5946),
-                        zoom: 15.0,
+                        zoom: AppConfig.mapFollowZoom,
                         controller: _mapController,
+                        myLocation: _currentLocation,
+                        myLocationAccuracy: _gpsStatus?['accuracy']?.toDouble(),
+                        myLocationHeading: _gpsStatus?['heading']?.toDouble(),
                         onMapEvent: (event) {
                           if (event.source == MapEventSource.onDrag ||
                               event.source == MapEventSource.onMultiFinger ||
@@ -368,7 +376,8 @@ class _TripScreenState extends State<TripScreen> {
                         },
                         markers: [
                           if (_currentLocation != null)
-                            buildBusMarker(_currentLocation!, 90, widget.busNumber ?? 'BUS', true),
+                            buildBusMarker(_currentLocation!, _gpsStatus?['heading']?.toDouble() ?? 0,
+                                widget.busNumber ?? 'BUS', true),
                         ],
                       ),
                       if (_isTripActive)
@@ -409,6 +418,54 @@ class _TripScreenState extends State<TripScreen> {
                                 ),
                               );
                             },
+                          ),
+                        ),
+                      if (_isTripActive)
+                        Positioned(
+                          top: 12,
+                          left: 0,
+                          right: 0,
+                          child: Center(
+                            child: StreamBuilder<Map<String, dynamic>>(
+                              stream: _locationService.statusStream,
+                              builder: (context, snapshot) {
+                                final speed = snapshot.data?['speed']?.toDouble() ?? 0;
+                                final heading = snapshot.data?['heading']?.toDouble() ?? 0;
+                                return Card(
+                                  elevation: 4,
+                                  child: Padding(
+                                    padding:
+                                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          Icons.speed,
+                                          color: speed > 0 ? AppColors.safeGreen : AppColors.medium,
+                                          size: 22,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          '${(speed).toStringAsFixed(0)} km/h',
+                                          style: const TextStyle(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Icon(
+                                          Icons.navigation,
+                                          color: AppColors.skyBlue,
+                                          size: 18,
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Text('${heading.toStringAsFixed(0)}°'),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
                           ),
                         ),
                       if (!_permissionGranted)

@@ -230,6 +230,8 @@ class LocationService {
       'latitude': _lastFix?.latitude,
       'longitude': _lastFix?.longitude,
       'accuracy': _lastFix?.accuracy,
+      'speed': _lastFix?.speed,
+      'heading': _lastFix?.heading,
     });
   }
 

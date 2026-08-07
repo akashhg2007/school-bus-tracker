@@ -11,28 +11,60 @@ class OsmMapWidget extends StatelessWidget {
   final List<Polyline> polylines;
   final MapController? controller;
   final bool showMyLocation;
+  final LatLng? myLocation;
+  final double? myLocationAccuracy;
+  final double? myLocationHeading;
+  final double? minZoom;
+  final double? maxZoom;
   final Function(TapPosition, LatLng)? onTap;
   final void Function(MapEvent)? onMapEvent;
 
   const OsmMapWidget({
     super.key,
     required this.center,
-    this.zoom = 15.0,
+    this.zoom = AppConfig.mapDefaultZoom,
     this.markers = const [],
     this.polylines = const [],
     this.controller,
     this.showMyLocation = false,
+    this.myLocation,
+    this.myLocationAccuracy,
+    this.myLocationHeading,
+    this.minZoom = AppConfig.mapMinZoom,
+    this.maxZoom = AppConfig.mapMaxZoom,
     this.onTap,
     this.onMapEvent,
   });
 
   @override
   Widget build(BuildContext context) {
+    final userMarker = (showMyLocation && myLocation != null)
+        ? buildMyLocationMarker(myLocation!, myLocationHeading)
+        : null;
+    final accuracyCircle = (showMyLocation && myLocation != null && myLocationAccuracy != null)
+        ? [
+            CircleMarker(
+              point: myLocation!,
+              radius: myLocationAccuracy!,
+              useRadiusInMeter: true,
+              color: AppColors.skyBlue.withOpacity(0.15),
+              borderColor: AppColors.skyBlue.withOpacity(0.4),
+              borderStrokeWidth: 1.5,
+            ),
+          ]
+        : const <CircleMarker>[];
+
+    final markersWithLocation = userMarker == null
+        ? markers
+        : [...markers, userMarker];
+
     return FlutterMap(
       mapController: controller,
       options: MapOptions(
         initialCenter: center,
         initialZoom: zoom,
+        minZoom: minZoom,
+        maxZoom: maxZoom,
         onTap: onTap != null ? (tapPos, latLng) => onTap!(tapPos, latLng) : null,
         onMapEvent: onMapEvent,
       ),
@@ -44,8 +76,11 @@ class OsmMapWidget extends StatelessWidget {
         PolylineLayer(
           polylines: polylines,
         ),
+        CircleLayer(
+          circles: accuracyCircle,
+        ),
         MarkerLayer(
-          markers: markers,
+          markers: markersWithLocation,
         ),
         RichAttributionWidget(
           attributions: [
@@ -138,5 +173,32 @@ Marker buildParentMarker(LatLng position, String studentName) {
         size: 24,
       ),
     ),
+  );
+}
+
+Marker buildMyLocationMarker(LatLng position, double? heading) {
+  return Marker(
+    point: position,
+    width: 32,
+    height: 32,
+    child: heading != null
+        ? Transform.rotate(
+            angle: heading * 3.14159 / 180,
+            child: const Icon(Icons.navigation, color: AppColors.skyBlue, size: 32),
+          )
+        : Container(
+            decoration: BoxDecoration(
+              color: AppColors.skyBlue,
+              shape: BoxShape.circle,
+              border: Border.all(color: AppColors.white, width: 3),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.25),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+          ),
   );
 }
