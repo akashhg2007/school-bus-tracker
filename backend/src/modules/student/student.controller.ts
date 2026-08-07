@@ -12,7 +12,7 @@ export const createStudent = async (req: Request, res: Response, next: NextFunct
       parentId,
       busId,
       stopId,
-    });
+    }, req.user!.schoolId);
 
     sendSuccess(res, 'Student created successfully', student, 201);
   } catch (error) {
@@ -36,7 +36,11 @@ export const getStudents = async (req: Request, res: Response, next: NextFunctio
 export const getStudentById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { id } = req.params;
-    const student = await studentService.getStudentById(id);
+    const student = await studentService.getStudentById(id, {
+      schoolId: req.user!.schoolId,
+      userId: req.user!.userId,
+      userType: req.user!.userType,
+    });
     sendSuccess(res, 'Student retrieved successfully', student);
   } catch (error) {
     next(error);
@@ -53,7 +57,7 @@ export const updateStudent = async (req: Request, res: Response, next: NextFunct
       rollNumber,
       busId,
       stopId,
-    });
+    }, req.user!.schoolId);
 
     sendSuccess(res, 'Student updated successfully', student);
   } catch (error) {
@@ -64,7 +68,7 @@ export const updateStudent = async (req: Request, res: Response, next: NextFunct
 export const deleteStudent = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { id } = req.params;
-    const result = await studentService.deleteStudent(id);
+    const result = await studentService.deleteStudent(id, req.user!.schoolId);
     sendSuccess(res, result.message);
   } catch (error) {
     next(error);
@@ -76,7 +80,7 @@ export const assignStudentToBus = async (req: Request, res: Response, next: Next
     const { id } = req.params;
     const { busId, stopId } = req.body;
 
-    const student = await studentService.assignStudentToBus(id, busId, stopId);
+    const student = await studentService.assignStudentToBus(id, busId, stopId, req.user!.schoolId);
     sendSuccess(res, 'Student assigned to bus successfully', student);
   } catch (error) {
     next(error);
@@ -86,7 +90,11 @@ export const assignStudentToBus = async (req: Request, res: Response, next: Next
 export const getStudentsByBus = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { busId } = req.params;
-    const students = await studentService.getStudentsByBus(busId);
+    const students = await studentService.getStudentsByBus(busId, {
+      schoolId: req.user!.schoolId,
+      userId: req.user!.userId,
+      userType: req.user!.userType,
+    });
     sendSuccess(res, 'Students retrieved successfully', students);
   } catch (error) {
     next(error);

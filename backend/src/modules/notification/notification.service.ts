@@ -11,7 +11,31 @@ interface SendNotificationInput {
   data?: Record<string, any>;
 }
 
-export const sendNotification = async (data: SendNotificationInput) => {
+export const sendNotification = async (data: SendNotificationInput, schoolId?: string) => {
+  if (schoolId) {
+    let target;
+    if (data.userType === 'PARENT') {
+      target = await prisma.parent.findUnique({
+        where: { id: data.userId },
+        select: { schoolId: true },
+      });
+    } else if (data.userType === 'DRIVER') {
+      target = await prisma.driver.findUnique({
+        where: { id: data.userId },
+        select: { schoolId: true },
+      });
+    } else {
+      target = await prisma.admin.findUnique({
+        where: { id: data.userId },
+        select: { schoolId: true },
+      });
+    }
+
+    if (!target || target.schoolId !== schoolId) {
+      throw new NotFoundError('Target user not found');
+    }
+  }
+
   const notification = await prisma.notification.create({
     data: {
       userId: data.userId,
@@ -94,9 +118,13 @@ export const getUserNotifications = async (userId: string, userType: string, pag
   return { notifications, total, page, limit };
 };
 
-export const markAsRead = async (notificationId: string) => {
+export const markAsRead = async (notificationId: string, userId?: string, userType?: string) => {
   const notification = await prisma.notification.findUnique({ where: { id: notificationId } });
-  if (!notification) throw new Error('Notification not found');
+  if (!notification) throw new NotFoundError('Notification not found');
+
+  if (userId && (notification.userId !== userId || notification.userType !== userType)) {
+    throw new NotFoundError('Notification not found');
+  }
 
   await prisma.notification.update({ where: { id: notificationId }, data: { isRead: 1 } });
   return { message: 'Notification marked as read' };
@@ -113,10 +141,14 @@ export const markAllAsRead = async (userId: string, userType: string) => {
 export const sendIncidentReport = async (schoolId: string, tripId: string, type: 'DELAY' | 'BREAKDOWN', details?: string) => {
   const trip = await prisma.trip.findUnique({
     where: { id: tripId },
-    include: { bus: { select: { busNumber: true } } },
+    include: { bus: { select: { busNumber: true, schoolId: true } } },
   });
 
   if (!trip) {
+    throw new NotFoundError('Trip not found');
+  }
+
+  if (trip.bus.schoolId !== schoolId) {
     throw new NotFoundError('Trip not found');
   }
 

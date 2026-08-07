@@ -1,30 +1,57 @@
 import { Socket } from 'socket.io';
 import { markAttendance } from '../../modules/attendance/attendance.service';
-import { verifyToken, AuthPayload } from '../../middleware/auth';
+import prisma from '../../config/database';
+
+const getAuth = (socket: Socket): { userId?: string; userType?: string; schoolId?: string } =>
+  (socket.data?.user as { userId?: string; userType?: string; schoolId?: string }) || {};
+
+const canMarkForTrip = async (
+  driverId: string,
+  tripId: string,
+): Promise<boolean> => {
+  const trip = await prisma.trip.findUnique({
+    where: { id: tripId },
+    include: { bus: { select: { driverId: true } } },
+  });
+  return !!trip && trip.bus.driverId === driverId;
+};
 
 export const handleAttendanceEvents = (socket: Socket) => {
   socket.on('driver:student-boarding', async (data) => {
     try {
-      const token = socket.handshake.auth.token;
-      if (!token) {
-        socket.emit('error', { message: 'Authentication required' });
-        return;
-      }
-
-      const decoded = verifyToken(token) as AuthPayload;
-      if (decoded.userType !== 'DRIVER') {
-        socket.emit('error', { message: 'Only drivers can mark attendance' });
+      const auth = getAuth(socket);
+      if (auth.userType !== 'DRIVER' || !auth.userId) {
+        socket.emit('error', { message: 'Only authenticated drivers can mark attendance' });
         return;
       }
 
       const { studentId, tripId } = data;
-      const markedBy = decoded.userId;
+
+      if (!studentId || !tripId) {
+        socket.emit('error', { message: 'Missing required fields: studentId, tripId' });
+        return;
+      }
+
+      if (!(await canMarkForTrip(auth.userId, tripId))) {
+        socket.emit('error', { message: 'Not authorized for this trip' });
+        return;
+      }
+
+      const student = await prisma.student.findUnique({
+        where: { id: studentId },
+        include: { bus: { select: { driverId: true } } },
+      });
+
+      if (!student || !student.bus || student.bus.driverId !== auth.userId) {
+        socket.emit('error', { message: 'Not authorized for this student' });
+        return;
+      }
 
       const attendance = await markAttendance({
         studentId,
         tripId,
         type: 'BOARDING',
-        markedBy,
+        markedBy: auth.userId,
       });
 
       socket.emit('attendance:marked', attendance);
@@ -36,26 +63,39 @@ export const handleAttendanceEvents = (socket: Socket) => {
 
   socket.on('driver:student-drop', async (data) => {
     try {
-      const token = socket.handshake.auth.token;
-      if (!token) {
-        socket.emit('error', { message: 'Authentication required' });
-        return;
-      }
-
-      const decoded = verifyToken(token) as AuthPayload;
-      if (decoded.userType !== 'DRIVER') {
-        socket.emit('error', { message: 'Only drivers can mark attendance' });
+      const auth = getAuth(socket);
+      if (auth.userType !== 'DRIVER' || !auth.userId) {
+        socket.emit('error', { message: 'Only authenticated drivers can mark attendance' });
         return;
       }
 
       const { studentId, tripId } = data;
-      const markedBy = decoded.userId;
+
+      if (!studentId || !tripId) {
+        socket.emit('error', { message: 'Missing required fields: studentId, tripId' });
+        return;
+      }
+
+      if (!(await canMarkForTrip(auth.userId, tripId))) {
+        socket.emit('error', { message: 'Not authorized for this trip' });
+        return;
+      }
+
+      const student = await prisma.student.findUnique({
+        where: { id: studentId },
+        include: { bus: { select: { driverId: true } } },
+      });
+
+      if (!student || !student.bus || student.bus.driverId !== auth.userId) {
+        socket.emit('error', { message: 'Not authorized for this student' });
+        return;
+      }
 
       const attendance = await markAttendance({
         studentId,
         tripId,
         type: 'DROPOFF',
-        markedBy,
+        markedBy: auth.userId,
       });
 
       socket.emit('attendance:marked', attendance);
@@ -69,24 +109,22 @@ export const handleAttendanceEvents = (socket: Socket) => {
 export const handleEmergency = (socket: Socket) => {
   socket.on('driver:emergency', async (data) => {
     try {
-      const token = socket.handshake.auth.token;
-      if (!token) {
-        socket.emit('error', { message: 'Authentication required' });
-        return;
-      }
-
-      const decoded = verifyToken(token) as AuthPayload;
-      if (decoded.userType !== 'DRIVER') {
-        socket.emit('error', { message: 'Only drivers can trigger emergency' });
+      const auth = getAuth(socket);
+      if (auth.userType !== 'DRIVER' || !auth.userId) {
+        socket.emit('error', { message: 'Only authenticated drivers can trigger emergency' });
         return;
       }
 
       const { tripId, message } = data;
 
-      // Emit emergency alert to school admin
-      socket.to(`school:${decoded.schoolId}`).emit('fleet:emergency-alert', {
+      if (tripId && !(await canMarkForTrip(auth.userId, tripId))) {
+        socket.emit('error', { message: 'Not authorized for this trip' });
+        return;
+      }
+
+      socket.to(`school:${auth.schoolId}`).emit('fleet:emergency-alert', {
         tripId,
-        driverId: decoded.userId,
+        driverId: auth.userId,
         message: message || 'Emergency triggered by driver',
         timestamp: new Date(),
       });
@@ -100,22 +138,16 @@ export const handleEmergency = (socket: Socket) => {
 
   socket.on('parent:emergency', async (data) => {
     try {
-      const token = socket.handshake.auth.token;
-      if (!token) {
-        socket.emit('error', { message: 'Authentication required' });
-        return;
-      }
-
-      const decoded = verifyToken(token) as AuthPayload;
-      if (decoded.userType !== 'PARENT') {
-        socket.emit('error', { message: 'Only parents can trigger emergency' });
+      const auth = getAuth(socket);
+      if (auth.userType !== 'PARENT' || !auth.userId) {
+        socket.emit('error', { message: 'Only authenticated parents can trigger emergency' });
         return;
       }
 
       const { studentName, message } = data;
 
-      socket.to(`school:${decoded.schoolId}`).emit('fleet:emergency-alert', {
-        parentId: decoded.userId,
+      socket.to(`school:${auth.schoolId}`).emit('fleet:emergency-alert', {
+        parentId: auth.userId,
         studentName: studentName || 'a student',
         message: message || 'Emergency triggered by a parent',
         timestamp: new Date(),

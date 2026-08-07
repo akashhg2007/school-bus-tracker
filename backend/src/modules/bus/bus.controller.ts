@@ -39,7 +39,7 @@ export const getBuses = async (req: Request, res: Response, next: NextFunction):
 export const getBusById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { id } = req.params;
-    const bus = await busService.getBusById(id);
+    const bus = await busService.getBusById(id, req.user!.schoolId);
     sendSuccess(res, 'Bus retrieved successfully', bus);
   } catch (error) {
     next(error);
@@ -59,7 +59,7 @@ export const updateBus = async (req: Request, res: Response, next: NextFunction)
       routeId,
       gpsDeviceId,
       isActive,
-    });
+    }, req.user!.schoolId);
 
     sendSuccess(res, 'Bus updated successfully', bus);
   } catch (error) {
@@ -70,7 +70,7 @@ export const updateBus = async (req: Request, res: Response, next: NextFunction)
 export const deleteBus = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { id } = req.params;
-    const result = await busService.deleteBus(id);
+    const result = await busService.deleteBus(id, req.user!.schoolId);
     sendSuccess(res, result.message);
   } catch (error) {
     next(error);
@@ -80,7 +80,7 @@ export const deleteBus = async (req: Request, res: Response, next: NextFunction)
 export const getBusLiveLocation = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { id } = req.params;
-    const location = await busService.getBusLiveLocation(id);
+    const location = await busService.getBusLiveLocation(id, req.user!.schoolId);
     sendSuccess(res, 'Bus location retrieved successfully', location);
   } catch (error) {
     next(error);

@@ -27,12 +27,26 @@ export const getParents = async (req: Request, res: Response, next: NextFunction
   }
 };
 
+export const getParentById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const parent = await parentService.getParentById(id);
+
+    if (parent.schoolId !== req.user!.schoolId) {
+      return sendSuccess(res, 'Parent retrieved successfully', null);
+    }
+    sendSuccess(res, 'Parent retrieved successfully', parent);
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const updateParent = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { id } = req.params;
     const { name, phone, email } = req.body;
 
-    const parent = await parentService.updateParent(id, { name, phone, email });
+    const parent = await parentService.updateParent(id, { name, phone, email }, req.user!.schoolId);
     sendSuccess(res, 'Parent updated successfully', parent);
   } catch (error) {
     next(error);
@@ -42,7 +56,7 @@ export const updateParent = async (req: Request, res: Response, next: NextFuncti
 export const deleteParent = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { id } = req.params;
-    const result = await parentService.deleteParent(id);
+    const result = await parentService.deleteParent(id, req.user!.schoolId);
     sendSuccess(res, result.message);
   } catch (error) {
     next(error);

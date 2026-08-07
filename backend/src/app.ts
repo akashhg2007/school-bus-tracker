@@ -1,5 +1,4 @@
 import express from 'express';
-import cors from 'cors';
 import dotenv from 'dotenv';
 import http from 'http';
 import fs from 'fs';
@@ -7,6 +6,8 @@ import path from 'path';
 import { initializeFirebase } from './config/firebase';
 import { initializeSocket } from './socket';
 import { AppError } from './utils/errors';
+import { securityHeaders, generalLimiter, corsOptions } from './middleware/security';
+import prisma from './config/database';
 
 // Import routes
 import authRoutes from './modules/auth/auth.routes';
@@ -31,12 +32,14 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middleware
-app.use(cors({
-  origin: true,
-  credentials: true,
-}));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(securityHeaders);
+app.use(corsOptions);
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+
+// Rate limiting
+app.use('/api/auth', generalLimiter);
+app.use('/api', generalLimiter);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -114,9 +117,25 @@ if (process.env.FIREBASE_SERVICE_ACCOUNT) {
 initializeSocket(httpServer);
 
 // Start server
-httpServer.listen(Number(PORT), '0.0.0.0', () => {
+const server = httpServer.listen(Number(PORT), '0.0.0.0', () => {
   console.log(`Server running on http://0.0.0.0:${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
+
+const shutdown = (signal: string) => {
+  console.log(`${signal} received, shutting down gracefully...`);
+  server.close(async () => {
+    try {
+      await prisma.$disconnect();
+    } catch (e) {
+      console.error('Error disconnecting from database', e);
+    }
+    process.exit(0);
+  });
+  setTimeout(() => process.exit(1), 10_000).unref();
+};
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
 
 export default app;

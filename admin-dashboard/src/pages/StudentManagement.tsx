@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api, { unwrapList } from '../services/api';
+import { exportToCSV } from '../services/exportCSV';
 
 interface Student {
   id: string;
@@ -13,6 +14,8 @@ interface Student {
 const StudentManagement: React.FC = () => {
   const [students, setStudents] = useState<Student[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterBus, setFilterBus] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [parentOptions, setParentOptions] = useState<Array<{ id: string; name: string; phone: string }>>([]);
@@ -57,6 +60,15 @@ const StudentManagement: React.FC = () => {
     }
     setIsLoading(false);
   };
+
+  const filteredStudents = students.filter((s) => {
+    const matchesSearch = !searchQuery ||
+      s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      s.rollNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      s.parent?.name?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesBus = !filterBus || s.bus?.id === filterBus;
+    return matchesSearch && matchesBus;
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -114,12 +126,50 @@ const StudentManagement: React.FC = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold text-gray-800">Student Management</h1>
-        <button
-          onClick={() => { setEditingStudent(null); setFormData({ name: '', rollNumber: '', parentId: '', busId: '', stopId: '' }); setShowModal(true); }}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
-        >
-          + Add Student
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => exportToCSV(filteredStudents.map(s => ({
+              Name: s.name,
+              'Roll Number': s.rollNumber,
+              Parent: s.parent?.name || 'N/A',
+              Bus: s.bus?.busNumber || 'Not assigned',
+              Stop: s.stop?.name || 'N/A',
+            })), 'students')}
+            className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700"
+          >
+            Export CSV
+          </button>
+          <button
+            onClick={() => { setEditingStudent(null); setFormData({ name: '', rollNumber: '', parentId: '', busId: '', stopId: '' }); setShowModal(true); }}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+          >
+            + Add Student
+          </button>
+        </div>
+      </div>
+
+      <div className="flex flex-col sm:flex-row gap-4">
+        <div className="flex-1">
+          <input
+            type="text"
+            placeholder="Search by name, roll number, or parent..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+        </div>
+        <div className="sm:w-48">
+          <select
+            value={filterBus}
+            onChange={(e) => setFilterBus(e.target.value)}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          >
+            <option value="">All Buses</option>
+            {busOptions.map((bus) => (
+              <option key={bus.id} value={bus.id}>{bus.busNumber}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       <div className="bg-white rounded-lg shadow overflow-hidden">
@@ -135,7 +185,7 @@ const StudentManagement: React.FC = () => {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {students.map((student) => (
+            {filteredStudents.map((student) => (
               <tr key={student.id}>
                 <td className="px-6 py-4 whitespace-nowrap">{student.name}</td>
                 <td className="px-6 py-4 whitespace-nowrap">{student.rollNumber}</td>
@@ -150,9 +200,14 @@ const StudentManagement: React.FC = () => {
             ))}
           </tbody>
         </table>
-        {students.length === 0 && (
-          <div className="p-6 text-center text-gray-500">No students found</div>
+        {filteredStudents.length === 0 && (
+          <div className="p-6 text-center text-gray-500">
+            {students.length === 0 ? 'No students found' : 'No students match your search'}
+          </div>
         )}
+        <div className="px-6 py-3 text-sm text-gray-500">
+          Showing {filteredStudents.length} of {students.length} students
+        </div>
       </div>
 
       {showModal && (

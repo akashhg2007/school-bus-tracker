@@ -54,7 +54,7 @@ export const getDriversBySchool = async (schoolId: string, page: number = 1, lim
 
   const [drivers, total] = await Promise.all([
     prisma.driver.findMany({
-      where: { schoolId },
+      where: { schoolId, isActive: 1 },
       include: {
         bus: {
           select: { id: true, busNumber: true, plateNumber: true },
@@ -65,13 +65,13 @@ export const getDriversBySchool = async (schoolId: string, page: number = 1, lim
       take: limit,
       orderBy: { createdAt: 'desc' },
     }),
-    prisma.driver.count({ where: { schoolId } }),
+    prisma.driver.count({ where: { schoolId, isActive: 1 } }),
   ]);
 
   return { drivers, total, page, limit };
 };
 
-export const getDriverById = async (driverId: string) => {
+export const getDriverById = async (driverId: string, schoolId?: string) => {
   const driver = await prisma.driver.findUnique({
     where: { id: driverId },
     include: {
@@ -92,15 +92,27 @@ export const getDriverById = async (driverId: string) => {
     throw new NotFoundError('Driver not found');
   }
 
+  if (schoolId && driver.schoolId !== schoolId) {
+    throw new NotFoundError('Driver not found');
+  }
+
   return driver;
 };
 
-export const updateDriver = async (driverId: string, data: UpdateDriverInput) => {
+export const updateDriver = async (
+  driverId: string,
+  data: UpdateDriverInput,
+  schoolId?: string,
+) => {
   const driver = await prisma.driver.findUnique({
     where: { id: driverId },
   });
 
   if (!driver) {
+    throw new NotFoundError('Driver not found');
+  }
+
+  if (schoolId && driver.schoolId !== schoolId) {
     throw new NotFoundError('Driver not found');
   }
 
@@ -143,12 +155,16 @@ export const updateDriver = async (driverId: string, data: UpdateDriverInput) =>
   return updatedDriver;
 };
 
-export const deleteDriver = async (driverId: string) => {
+export const deleteDriver = async (driverId: string, schoolId?: string) => {
   const driver = await prisma.driver.findUnique({
     where: { id: driverId },
   });
 
   if (!driver) {
+    throw new NotFoundError('Driver not found');
+  }
+
+  if (schoolId && driver.schoolId !== schoolId) {
     throw new NotFoundError('Driver not found');
   }
 

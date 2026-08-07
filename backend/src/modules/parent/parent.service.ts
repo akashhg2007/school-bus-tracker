@@ -38,7 +38,7 @@ export const getParentsBySchool = async (schoolId: string, page: number = 1, lim
 
   const [parents, total] = await Promise.all([
     prisma.parent.findMany({
-      where: { schoolId },
+      where: { schoolId, isActive: 1 },
       include: {
         _count: { select: { students: true } },
         students: {
@@ -49,15 +49,39 @@ export const getParentsBySchool = async (schoolId: string, page: number = 1, lim
       take: limit,
       orderBy: { createdAt: 'desc' },
     }),
-    prisma.parent.count({ where: { schoolId } }),
+    prisma.parent.count({ where: { schoolId, isActive: 1 } }),
   ]);
 
   return { parents, total, page, limit };
 };
 
-export const updateParent = async (parentId: string, data: UpdateParentInput) => {
+export const getParentById = async (parentId: string) => {
+  const parent = await prisma.parent.findUnique({
+    where: { id: parentId },
+    include: {
+      _count: { select: { students: true } },
+      students: {
+        select: { id: true, name: true, rollNumber: true },
+      },
+    },
+  });
+  if (!parent) {
+    throw new NotFoundError('Parent not found');
+  }
+  return parent;
+};
+
+export const updateParent = async (
+  parentId: string,
+  data: UpdateParentInput,
+  schoolId?: string,
+) => {
   const parent = await prisma.parent.findUnique({ where: { id: parentId } });
   if (!parent) {
+    throw new NotFoundError('Parent not found');
+  }
+
+  if (schoolId && parent.schoolId !== schoolId) {
     throw new NotFoundError('Parent not found');
   }
 
@@ -77,9 +101,13 @@ export const updateParent = async (parentId: string, data: UpdateParentInput) =>
   });
 };
 
-export const deleteParent = async (parentId: string) => {
+export const deleteParent = async (parentId: string, schoolId?: string) => {
   const parent = await prisma.parent.findUnique({ where: { id: parentId } });
   if (!parent) {
+    throw new NotFoundError('Parent not found');
+  }
+
+  if (schoolId && parent.schoolId !== schoolId) {
     throw new NotFoundError('Parent not found');
   }
 

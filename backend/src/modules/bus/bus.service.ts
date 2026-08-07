@@ -90,7 +90,7 @@ export const getBusesBySchool = async (schoolId: string, page: number = 1, limit
 
   const [buses, total] = await Promise.all([
     prisma.bus.findMany({
-      where: { schoolId },
+      where: { schoolId, isActive: 1 },
       include: {
         driver: {
           select: { id: true, name: true, phone: true },
@@ -104,13 +104,13 @@ export const getBusesBySchool = async (schoolId: string, page: number = 1, limit
       take: limit,
       orderBy: { createdAt: 'desc' },
     }),
-    prisma.bus.count({ where: { schoolId } }),
+    prisma.bus.count({ where: { schoolId, isActive: 1 } }),
   ]);
 
   return { buses, total, page, limit };
 };
 
-export const getBusById = async (busId: string) => {
+export const getBusById = async (busId: string, schoolId?: string) => {
   const bus = await prisma.bus.findUnique({
     where: { id: busId },
     include: {
@@ -137,15 +137,23 @@ export const getBusById = async (busId: string) => {
     throw new NotFoundError('Bus not found');
   }
 
+  if (schoolId && bus.schoolId !== schoolId) {
+    throw new NotFoundError('Bus not found');
+  }
+
   return bus;
 };
 
-export const updateBus = async (busId: string, data: UpdateBusInput) => {
+export const updateBus = async (busId: string, data: UpdateBusInput, schoolId?: string) => {
   const bus = await prisma.bus.findUnique({
     where: { id: busId },
   });
 
   if (!bus) {
+    throw new NotFoundError('Bus not found');
+  }
+
+  if (schoolId && bus.schoolId !== schoolId) {
     throw new NotFoundError('Bus not found');
   }
 
@@ -205,12 +213,16 @@ export const updateBus = async (busId: string, data: UpdateBusInput) => {
   return updatedBus;
 };
 
-export const deleteBus = async (busId: string) => {
+export const deleteBus = async (busId: string, schoolId?: string) => {
   const bus = await prisma.bus.findUnique({
     where: { id: busId },
   });
 
   if (!bus) {
+    throw new NotFoundError('Bus not found');
+  }
+
+  if (schoolId && bus.schoolId !== schoolId) {
     throw new NotFoundError('Bus not found');
   }
 
@@ -223,7 +235,7 @@ export const deleteBus = async (busId: string) => {
   return { message: 'Bus deleted successfully' };
 };
 
-export const getBusLiveLocation = async (busId: string) => {
+export const getBusLiveLocation = async (busId: string, schoolId?: string) => {
   const bus = await prisma.bus.findUnique({
     where: { id: busId },
     include: {
@@ -242,6 +254,10 @@ export const getBusLiveLocation = async (busId: string) => {
   });
 
   if (!bus) {
+    throw new NotFoundError('Bus not found');
+  }
+
+  if (schoolId && bus.schoolId !== schoolId) {
     throw new NotFoundError('Bus not found');
   }
 

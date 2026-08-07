@@ -16,13 +16,32 @@ interface UpdateStudentInput {
   stopId?: string;
 }
 
-export const createStudent = async (data: CreateStudentInput) => {
+interface StudentScope {
+  schoolId: string;
+  userId: string;
+  userType: string;
+}
+
+const assertStudentScope = (student: any, scope: StudentScope) => {
+  const schoolId = student?.parent?.schoolId ?? student?.schoolId;
+  if (scope.userType === 'ADMIN' && schoolId === scope.schoolId) return;
+  if (scope.userType === 'PARENT' && student.parentId === scope.userId) return;
+  if (scope.userType === 'DRIVER' && student.bus?.driverId === scope.userId) return;
+  throw new NotFoundError('Student not found');
+};
+
+export const createStudent = async (data: CreateStudentInput, schoolId?: string) => {
   // Check if parent exists
   const parent = await prisma.parent.findUnique({
     where: { id: data.parentId },
+    select: { schoolId: true },
   });
 
   if (!parent) {
+    throw new NotFoundError('Parent not found');
+  }
+
+  if (schoolId && parent.schoolId !== schoolId) {
     throw new NotFoundError('Parent not found');
   }
 
@@ -42,9 +61,14 @@ export const createStudent = async (data: CreateStudentInput) => {
   if (data.busId) {
     const bus = await prisma.bus.findUnique({
       where: { id: data.busId },
+      select: { schoolId: true },
     });
 
     if (!bus) {
+      throw new NotFoundError('Bus not found');
+    }
+
+    if (schoolId && bus.schoolId !== schoolId) {
       throw new NotFoundError('Bus not found');
     }
   }
@@ -53,9 +77,14 @@ export const createStudent = async (data: CreateStudentInput) => {
   if (data.stopId) {
     const stop = await prisma.stop.findUnique({
       where: { id: data.stopId },
+      include: { route: { select: { schoolId: true } } },
     });
 
     if (!stop) {
+      throw new NotFoundError('Stop not found');
+    }
+
+    if (schoolId && stop.route.schoolId !== schoolId) {
       throw new NotFoundError('Stop not found');
     }
   }
@@ -117,14 +146,16 @@ export const getStudentsBySchool = async (schoolId: string, page: number = 1, li
   return { students, total, page, limit };
 };
 
-export const getStudentById = async (studentId: string) => {
+export const getStudentById = async (studentId: string, scope?: StudentScope) => {
   const student = await prisma.student.findUnique({
     where: { id: studentId },
     include: {
       parent: {
-        select: { id: true, name: true, phone: true, email: true },
+        select: { id: true, name: true, phone: true, email: true, schoolId: true },
       },
-      bus: true,
+      bus: {
+        select: { id: true, busNumber: true, driverId: true },
+      },
       stop: true,
       attendance: {
         orderBy: { createdAt: 'desc' },
@@ -141,15 +172,24 @@ export const getStudentById = async (studentId: string) => {
     throw new NotFoundError('Student not found');
   }
 
+  if (scope) {
+    assertStudentScope(student, scope);
+  }
+
   return student;
 };
 
-export const updateStudent = async (studentId: string, data: UpdateStudentInput) => {
+export const updateStudent = async (studentId: string, data: UpdateStudentInput, schoolId?: string) => {
   const student = await prisma.student.findUnique({
     where: { id: studentId },
+    include: { parent: { select: { schoolId: true } } },
   });
 
   if (!student) {
+    throw new NotFoundError('Student not found');
+  }
+
+  if (schoolId && student.parent.schoolId !== schoolId) {
     throw new NotFoundError('Student not found');
   }
 
@@ -208,12 +248,17 @@ export const updateStudent = async (studentId: string, data: UpdateStudentInput)
   return updatedStudent;
 };
 
-export const deleteStudent = async (studentId: string) => {
+export const deleteStudent = async (studentId: string, schoolId?: string) => {
   const student = await prisma.student.findUnique({
     where: { id: studentId },
+    include: { parent: { select: { schoolId: true } } },
   });
 
   if (!student) {
+    throw new NotFoundError('Student not found');
+  }
+
+  if (schoolId && student.parent.schoolId !== schoolId) {
     throw new NotFoundError('Student not found');
   }
 
@@ -224,12 +269,22 @@ export const deleteStudent = async (studentId: string) => {
   return { message: 'Student deleted successfully' };
 };
 
-export const assignStudentToBus = async (studentId: string, busId: string, stopId: string) => {
+export const assignStudentToBus = async (
+  studentId: string,
+  busId: string,
+  stopId: string,
+  schoolId?: string,
+) => {
   const student = await prisma.student.findUnique({
     where: { id: studentId },
+    include: { parent: { select: { schoolId: true } } },
   });
 
   if (!student) {
+    throw new NotFoundError('Student not found');
+  }
+
+  if (schoolId && student.parent.schoolId !== schoolId) {
     throw new NotFoundError('Student not found');
   }
 
@@ -241,11 +296,20 @@ export const assignStudentToBus = async (studentId: string, busId: string, stopI
     throw new NotFoundError('Bus not found');
   }
 
+  if (schoolId && bus.schoolId !== schoolId) {
+    throw new NotFoundError('Bus not found');
+  }
+
   const stop = await prisma.stop.findUnique({
     where: { id: stopId },
+    include: { route: { select: { schoolId: true } } },
   });
 
   if (!stop) {
+    throw new NotFoundError('Stop not found');
+  }
+
+  if (schoolId && stop.route.schoolId !== schoolId) {
     throw new NotFoundError('Stop not found');
   }
 
@@ -268,7 +332,34 @@ export const assignStudentToBus = async (studentId: string, busId: string, stopI
   return updatedStudent;
 };
 
-export const getStudentsByBus = async (busId: string) => {
+export const getStudentsByBus = async (busId: string, scope?: StudentScope) => {
+  const bus = await prisma.bus.findUnique({
+    where: { id: busId },
+    select: { id: true, schoolId: true, driverId: true },
+  });
+
+  if (!bus) {
+    throw new NotFoundError('Bus not found');
+  }
+
+  if (scope) {
+    if (scope.userType === 'ADMIN' && bus.schoolId !== scope.schoolId) {
+      throw new NotFoundError('Bus not found');
+    }
+    if (scope.userType === 'DRIVER' && bus.driverId !== scope.userId) {
+      throw new NotFoundError('Bus not found');
+    }
+    if (scope.userType === 'PARENT') {
+      const student = await prisma.student.findFirst({
+        where: { busId: bus.id, parentId: scope.userId },
+        select: { id: true },
+      });
+      if (!student) {
+        throw new NotFoundError('Bus not found');
+      }
+    }
+  }
+
   const students = await prisma.student.findMany({
     where: { busId },
     include: {

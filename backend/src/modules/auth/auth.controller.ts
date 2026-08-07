@@ -14,8 +14,8 @@ export const sendOtp = async (req: Request, res: Response, next: NextFunction): 
 
 export const verifyOtp = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { phone } = req.body;
-    const result = await authService.verifyOtp(phone);
+    const { phone, otp } = req.body;
+    const result = await authService.verifyOtp(phone, otp);
     sendSuccess(res, 'OTP verified successfully', result);
   } catch (error) {
     next(error);
@@ -41,7 +41,11 @@ export const refreshToken = async (req: Request, res: Response, next: NextFuncti
 
 export const logout = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    // In a real app, you might want to invalidate the token
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const { revokeToken } = await import('../../middleware/auth');
+      revokeToken(authHeader.split(' ')[1]);
+    }
     sendSuccess(res, 'Logged out successfully');
   } catch (error) {
     next(error);

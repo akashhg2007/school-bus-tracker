@@ -37,7 +37,7 @@ export const getDrivers = async (req: Request, res: Response, next: NextFunction
 export const getDriverById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { id } = req.params;
-    const driver = await driverService.getDriverById(id);
+    const driver = await driverService.getDriverById(id, req.user!.schoolId);
     sendSuccess(res, 'Driver retrieved successfully', driver);
   } catch (error) {
     next(error);
@@ -55,7 +55,7 @@ export const updateDriver = async (req: Request, res: Response, next: NextFuncti
       licenseNumber,
       email,
       isActive,
-    });
+    }, req.user!.schoolId);
 
     sendSuccess(res, 'Driver updated successfully', driver);
   } catch (error) {
@@ -66,7 +66,7 @@ export const updateDriver = async (req: Request, res: Response, next: NextFuncti
 export const deleteDriver = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { id } = req.params;
-    const result = await driverService.deleteDriver(id);
+    const result = await driverService.deleteDriver(id, req.user!.schoolId);
     sendSuccess(res, result.message);
   } catch (error) {
     next(error);

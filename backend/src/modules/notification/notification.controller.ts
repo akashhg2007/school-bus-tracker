@@ -19,7 +19,7 @@ export const getNotifications = async (req: Request, res: Response, next: NextFu
 export const markAsRead = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { id } = req.params;
-    const result = await notificationService.markAsRead(id);
+    const result = await notificationService.markAsRead(id, req.user!.userId, req.user!.userType);
     sendSuccess(res, result.message);
   } catch (error) {
     next(error);
@@ -47,7 +47,7 @@ export const sendNotification = async (req: Request, res: Response, next: NextFu
       title,
       body,
       data,
-    });
+    }, req.user!.schoolId);
 
     sendSuccess(res, 'Notification sent successfully', notification, 201);
   } catch (error) {

@@ -45,6 +45,8 @@ model Admin {
 
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
+
+  @@index([schoolId])
 }
 
 model Driver {
@@ -62,6 +64,8 @@ model Driver {
 
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
+
+  @@index([schoolId])
 }
 
 model Parent {
@@ -78,6 +82,8 @@ model Parent {
 
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
+
+  @@index([schoolId])
 }
 
 // ==================== BUS & ROUTE MODELS ====================
@@ -101,6 +107,10 @@ model Bus {
 
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
+
+  @@index([schoolId])
+  @@index([driverId])
+  @@index([routeId])
 }
 
 model Route {
@@ -113,6 +123,8 @@ model Route {
 
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
+
+  @@index([schoolId])
 }
 
 model Stop {
@@ -127,6 +139,8 @@ model Stop {
 
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
+
+  @@index([routeId])
 }
 
 // ==================== STUDENT MODEL ====================
@@ -146,6 +160,10 @@ model Student {
 
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
+
+  @@index([parentId])
+  @@index([busId])
+  @@index([stopId])
 }
 
 // ==================== TRIP MODELS ====================
@@ -165,6 +183,10 @@ model Trip {
 
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
+
+  @@index([busId, status, createdAt])
+  @@index([driverId, status, createdAt])
+  @@index([status])
 }
 
 // ==================== GPS & ATTENDANCE MODELS ====================
@@ -180,6 +202,8 @@ model GpsLocation {
   accuracy      Float?
 
   createdAt     DateTime       @default(now())
+
+  @@index([tripId, createdAt])
 }
 
 model Attendance {
@@ -193,6 +217,9 @@ model Attendance {
   markedBy      String
 
   createdAt     DateTime       @default(now())
+
+  @@index([studentId, createdAt])
+  @@index([tripId])
 }
 
 // ==================== NOTIFICATION MODELS ====================
@@ -207,6 +234,9 @@ model Notification {
   isRead        Int            @default(0)
 
   createdAt     DateTime       @default(now())
+
+  @@index([userId, userType, createdAt])
+  @@index([isRead])
 }
 
 // ==================== LEAVE REQUEST MODEL ====================
@@ -223,6 +253,9 @@ model LeaveRequest {
 
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
+
+  @@index([parentId, status])
+  @@index([studentId])
 }
 
 // ==================== SUBSCRIPTION MODEL ====================
@@ -251,6 +284,8 @@ model Announcement {
   title     String
   body      String
   createdAt DateTime @default(now())
+
+  @@index([schoolId, createdAt])
 }
 
 // ==================== MAINTENANCE MODEL ====================
@@ -267,4 +302,7 @@ model MaintenanceRecord {
 
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+
+  @@index([busId, status, dueDate])
+  @@index([status])
 }

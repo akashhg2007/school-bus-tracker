@@ -129,7 +129,12 @@ class _TripScreenState extends State<TripScreen> {
         });
       }
     } catch (e) {
-      setState(() => _loading = false);
+      if (mounted) {
+        setState(() => _loading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load students: ${_extractError(e)}')),
+        );
+      }
     }
   }
 
@@ -177,7 +182,10 @@ class _TripScreenState extends State<TripScreen> {
 
     try {
       final api = ApiService();
-      final response = await api.startTrip(widget.busId!, 'MORNING');
+      final tripType = await _pickTripType();
+      if (tripType == null) return;
+
+      final response = await api.startTrip(widget.busId!, tripType);
       if (response.statusCode == 200 || response.statusCode == 201) {
         final trip = response.data['data'];
         setState(() {
@@ -200,6 +208,38 @@ class _TripScreenState extends State<TripScreen> {
         );
       }
     }
+  }
+
+  Future<String?> _pickTripType() async {
+    if (!mounted) return 'MORNING';
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('Select Trip Type'),
+        children: [
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx, 'MORNING'),
+            child: const Row(
+              children: [
+                Icon(Icons.wb_sunny, color: AppColors.alertOrange),
+                SizedBox(width: 12),
+                Text('Morning (School)'),
+              ],
+            ),
+          ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx, 'EVENING'),
+            child: const Row(
+              children: [
+                Icon(Icons.nights_stay, color: AppColors.deepBlue),
+                SizedBox(width: 12),
+                Text('Evening (Return)'),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   String _extractError(Object e) {
@@ -269,11 +309,42 @@ class _TripScreenState extends State<TripScreen> {
 
   Future<void> _triggerSos() async {
     if (_activeTripId == null) return;
-    _socketService.triggerEmergency(_activeTripId!, 'Emergency triggered by driver (SOS)');
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('SOS alert sent to school')),
-      );
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Emergency SOS'),
+        content: const Text(
+          'This will immediately alert the school administration and trigger an emergency protocol. '\
+          'Are you sure you want to continue?'
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.dangerRed,
+              foregroundColor: AppColors.white,
+            ),
+            child: const Text('YES, TRIGGER SOS'),
+          ),
+        ],
+      ),
+    );
+    if (confirm == true) {
+      _socketService.triggerEmergency(_activeTripId!, 'Emergency triggered by driver (SOS)');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('🚨 SOS alert sent to school! Emergency protocol activated.'),
+            backgroundColor: AppColors.dangerRed,
+            behavior: SnackBarBehavior.fixed,
+            duration: Duration(seconds: 5),
+          ),
+        );
+      }
     }
   }
 
@@ -523,11 +594,14 @@ class _TripScreenState extends State<TripScreen> {
                     ],
                   ),
                 ),
-                Expanded(
+                  Expanded(
                   flex: 3,
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
+                  child: RefreshIndicator(
+                    onRefresh: _loadStudents,
+                    child: SingleChildScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         SizedBox(

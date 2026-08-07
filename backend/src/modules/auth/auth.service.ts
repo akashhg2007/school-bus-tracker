@@ -1,9 +1,10 @@
 import prisma from '../../config/database';
 import { generateToken, AuthPayload } from '../../middleware/auth';
-import { NotFoundError } from '../../utils/errors';
+import { NotFoundError, UnauthorizedError } from '../../utils/errors';
 
 interface SendOtpResult {
   sessionInfo: string;
+  devOtp?: string;
 }
 
 interface VerifyOtpResult {
@@ -17,12 +18,51 @@ interface VerifyOtpResult {
   };
 }
 
+const OTP_TTL_MS = 5 * 60 * 1000;
+const MAX_ATTEMPTS = 5;
+const otpStore = new Map<string, { code: string; expiresAt: number; attempts: number }>();
+
+const isProduction = (): boolean => process.env.NODE_ENV === 'production';
+
 export const sendOtp = async (phone: string): Promise<SendOtpResult> => {
-  // Dev mode: accept any phone number
-  return { sessionInfo: 'dev-session-' + Date.now() };
+  const code = String(Math.floor(100000 + Math.random() * 900000));
+  otpStore.set(phone, { code, expiresAt: Date.now() + OTP_TTL_MS, attempts: 0 });
+
+  // In production, an SMS gateway would send the code here.
+  // No SMS provider is configured, so dev mode logs the code instead.
+  if (!isProduction()) {
+    console.log(`[DEV] OTP for ${phone}: ${code}`);
+    return { sessionInfo: 'otp-' + Date.now(), devOtp: code };
+  }
+
+  return { sessionInfo: 'otp-' + Date.now() };
 };
 
-export const verifyOtp = async (phone: string): Promise<VerifyOtpResult> => {
+export const verifyOtp = async (phone: string, otp?: string): Promise<VerifyOtpResult> => {
+  const entry = otpStore.get(phone);
+
+  if (otp) {
+    if (!entry) {
+      throw new UnauthorizedError('OTP expired, request a new one');
+    }
+    if (Date.now() > entry.expiresAt) {
+      otpStore.delete(phone);
+      throw new UnauthorizedError('OTP expired, request a new one');
+    }
+    if (entry.attempts >= MAX_ATTEMPTS) {
+      otpStore.delete(phone);
+      throw new UnauthorizedError('Too many OTP attempts, request a new code');
+    }
+    if (String(otp).trim() !== entry.code) {
+      entry.attempts += 1;
+      throw new UnauthorizedError('Invalid OTP');
+    }
+    otpStore.delete(phone);
+  } else if (isProduction()) {
+    throw new UnauthorizedError('OTP is required');
+  }
+  // Dev mode without OTP keeps the legacy flow for testing.
+
   // Find user by phone (check parent, driver)
   const parent = await prisma.parent.findUnique({
     where: { phone },

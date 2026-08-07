@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api, { unwrapList } from '../services/api';
+import { exportToCSV } from '../services/exportCSV';
 
 interface Bus {
   id: string;
@@ -26,6 +27,7 @@ interface RouteOption {
 const BusManagement: React.FC = () => {
   const [buses, setBuses] = useState<Bus[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingBus, setEditingBus] = useState<Bus | null>(null);
   const [drivers, setDrivers] = useState<DriverOption[]>([]);
@@ -47,6 +49,17 @@ const BusManagement: React.FC = () => {
     }
     setIsLoading(false);
   };
+
+  const filteredBuses = buses.filter((b) => {
+    if (!searchQuery) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      b.busNumber.toLowerCase().includes(q) ||
+      b.plateNumber.toLowerCase().includes(q) ||
+      b.driver?.name?.toLowerCase().includes(q) ||
+      b.route?.name?.toLowerCase().includes(q)
+    );
+  });
 
   useEffect(() => {
     loadBuses();
@@ -118,12 +131,38 @@ const BusManagement: React.FC = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold text-gray-800">Bus Management</h1>
-        <button
-          onClick={() => { setEditingBus(null); setFormData({ busNumber: '', plateNumber: '', capacity: 40, driverId: '', routeId: '' }); setShowModal(true); }}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
-        >
-          + Add Bus
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => exportToCSV(filteredBuses.map(b => ({
+              'Bus Number': b.busNumber,
+              'Plate Number': b.plateNumber,
+              Capacity: b.capacity,
+              Driver: b.driver?.name || 'Unassigned',
+              Route: b.route?.name || 'No route',
+              Students: b._count?.students || 0,
+              Status: b.isActive ? 'Active' : 'Inactive',
+            })), 'buses')}
+            className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700"
+          >
+            Export CSV
+          </button>
+          <button
+            onClick={() => { setEditingBus(null); setFormData({ busNumber: '', plateNumber: '', capacity: 40, driverId: '', routeId: '' }); setShowModal(true); }}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+          >
+            + Add Bus
+          </button>
+        </div>
+      </div>
+
+      <div className="flex-1">
+        <input
+          type="text"
+          placeholder="Search by bus number, plate, driver, or route..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        />
       </div>
 
       <div className="bg-white rounded-lg shadow overflow-hidden">
@@ -141,7 +180,7 @@ const BusManagement: React.FC = () => {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {buses.map((bus) => (
+            {filteredBuses.map((bus) => (
               <tr key={bus.id} className="hover:bg-gray-50">
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="text-sm font-medium text-gray-900">{bus.busNumber}</div>
@@ -174,9 +213,14 @@ const BusManagement: React.FC = () => {
             ))}
           </tbody>
         </table>
-        {buses.length === 0 && (
-          <div className="p-6 text-center text-gray-500">No buses found</div>
+        {filteredBuses.length === 0 && (
+          <div className="p-6 text-center text-gray-500">
+            {buses.length === 0 ? 'No buses found' : 'No buses match your search'}
+          </div>
         )}
+        <div className="px-6 py-3 text-sm text-gray-500">
+          Showing {filteredBuses.length} of {buses.length} buses
+        </div>
       </div>
 
       {showModal && (

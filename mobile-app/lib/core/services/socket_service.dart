@@ -148,6 +148,20 @@ class SocketService {
     _socket?.emit('join:driver', driverId);
   }
 
+  void subscribeNotifications() {
+    final auth = AuthService();
+    final userType = auth.userType;
+    final userId = auth.userId;
+
+    if (userType == 'PARENT' && userId != null) {
+      joinParentRoom(userId);
+    } else if (userType == 'DRIVER' && userId != null) {
+      joinDriverRoom(userId);
+    } else if (userType == 'ADMIN' && auth.schoolId != null) {
+      joinSchoolRoom(auth.schoolId!);
+    }
+  }
+
   void sendLocationUpdate(
     String tripId,
     double latitude,

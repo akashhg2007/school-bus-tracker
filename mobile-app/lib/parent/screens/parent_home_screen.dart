@@ -120,8 +120,14 @@ class _ParentHomeScreenState extends State<ParentHomeScreen> {
   }
 
   Widget _buildHomeTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+    return RefreshIndicator(
+      onRefresh: () async {
+        await _loadChildren();
+        await _getUserLocation();
+      },
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -208,6 +214,7 @@ class _ParentHomeScreenState extends State<ParentHomeScreen> {
               );
             }),
         ],
+      ),
       ),
     );
   }

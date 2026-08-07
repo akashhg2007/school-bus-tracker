@@ -315,9 +315,12 @@ class _BusTrackingScreenState extends State<BusTrackingScreen> {
                 ),
                 Expanded(
                   flex: 2,
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
+                  child: RefreshIndicator(
+                    onRefresh: _loadBusData,
+                    child: SingleChildScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Card(
