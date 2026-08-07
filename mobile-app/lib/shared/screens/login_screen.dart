@@ -15,50 +15,38 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final TextEditingController _phoneController = TextEditingController();
-  final TextEditingController _otpController = TextEditingController();
+  final TextEditingController _identifierController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
-  bool _otpSent = false;
   bool _isLoading = false;
   String? _error;
+  bool _obscurePassword = true;
 
   @override
   void dispose() {
-    _phoneController.dispose();
-    _otpController.dispose();
+    _identifierController.dispose();
+    _passwordController.dispose();
     super.dispose();
   }
 
-  Future<void> _sendOtp() async {
+  Future<void> _login() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() { _isLoading = true; _error = null; });
     final auth = AuthService();
-    final errorMessage = await auth.sendOtp(_phoneController.text.trim());
-    setState(() {
-      _isLoading = false;
-      if (errorMessage == null) {
-        _otpSent = true;
-      } else {
-        _error = 'Failed to send OTP. $errorMessage';
-      }
-    });
-  }
-
-  Future<void> _verifyOtp() async {
-    if (!_formKey.currentState!.validate()) return;
-    setState(() { _isLoading = true; _error = null; });
-    final auth = AuthService();
-    final success = await auth.verifyOtp(_phoneController.text.trim());
+    final errorMessage = await auth.loginWithPassword(
+      _identifierController.text.trim(),
+      _passwordController.text,
+    );
     setState(() => _isLoading = false);
 
-    if (success && mounted) {
+    if (errorMessage == null && mounted) {
       if (widget.onLogin != null) {
         widget.onLogin!.call(auth.userType ?? 'PARENT');
       } else {
         _navigateToHome(auth.userType ?? 'PARENT');
       }
     } else if (mounted) {
-      setState(() => _error = 'Phone number not registered. Contact your school.');
+      setState(() => _error = errorMessage ?? 'Login failed. Please try again.');
     }
   }
 
@@ -136,65 +124,49 @@ class _LoginScreenState extends State<LoginScreen> {
                         ],
                       ),
                     ),
-                  if (!_otpSent) ...[
-                    TextFormField(
-                      controller: _phoneController,
-                      keyboardType: TextInputType.phone,
-                      decoration: const InputDecoration(
-                        labelText: 'Phone Number',
-                        prefixIcon: Icon(Icons.phone),
-                        hintText: 'Enter registered phone number',
-                      ),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) return 'Please enter your phone number';
-                        if (value.length < 10) return 'Please enter a valid phone number';
-                        return null;
-                      },
+                  TextFormField(
+                    controller: _identifierController,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(
+                      labelText: 'Email or Phone',
+                      prefixIcon: Icon(Icons.person),
+                      hintText: 'Enter email or phone number',
                     ),
-                    const SizedBox(height: 24),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: ElevatedButton(
-                        onPressed: _isLoading ? null : _sendOtp,
-                        child: _isLoading
-                            ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: AppColors.white, strokeWidth: 2))
-                            : const Text('Send OTP', style: TextStyle(fontSize: 16)),
-                      ),
-                    ),
-                  ] else ...[
-                    Text('OTP sent to ${_phoneController.text}', style: const TextStyle(color: AppColors.medium)),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _otpController,
-                      keyboardType: TextInputType.number,
-                      maxLength: 6,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 24, letterSpacing: 8),
-                      decoration: const InputDecoration(labelText: 'Enter OTP', hintText: '------', counterText: ''),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) return 'Please enter the OTP';
-                        if (value.length != 6) return 'OTP must be 6 digits';
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 24),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: ElevatedButton(
-                        onPressed: _isLoading ? null : _verifyOtp,
-                        child: _isLoading
-                            ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: AppColors.white, strokeWidth: 2))
-                            : const Text('Verify & Login', style: TextStyle(fontSize: 16)),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) return 'Please enter your email or phone number';
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _passwordController,
+                    obscureText: _obscurePassword,
+                    decoration: InputDecoration(
+                      labelText: 'Password',
+                      prefixIcon: const Icon(Icons.lock),
+                      hintText: 'Enter your password',
+                      suffixIcon: IconButton(
+                        icon: Icon(_obscurePassword ? Icons.visibility : Icons.visibility_off),
+                        onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    TextButton(
-                      onPressed: () => setState(() { _otpSent = false; _error = null; }),
-                      child: const Text('Change Phone Number', style: TextStyle(color: AppColors.skyBlue)),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) return 'Please enter your password';
+                      if (value.length < 6) return 'Password must be at least 6 characters';
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton(
+                      onPressed: _isLoading ? null : _login,
+                      child: _isLoading
+                          ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: AppColors.white, strokeWidth: 2))
+                          : const Text('Login', style: TextStyle(fontSize: 16)),
                     ),
-                  ],
+                  ),
                 ],
               ),
             ),

@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -339,7 +339,7 @@ class _TripScreenState extends State<TripScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('🚨 SOS alert sent to school! Emergency protocol activated.'),
+            content: Text('ðŸš¨ SOS alert sent to school! Emergency protocol activated.'),
             backgroundColor: AppColors.dangerRed,
             behavior: SnackBarBehavior.fixed,
             duration: Duration(seconds: 5),
@@ -556,7 +556,7 @@ class _TripScreenState extends State<TripScreen> {
                                           size: 18,
                                         ),
                                         const SizedBox(width: 4),
-                                        Text('${heading.toStringAsFixed(0)}°'),
+                                        Text('${heading.toStringAsFixed(0)}Â°'),
                                       ],
                                     ),
                                   ),
@@ -739,6 +739,7 @@ class _TripScreenState extends State<TripScreen> {
                     ),
                   ),
                 ),
+                  ),
               ],
             ),
     );

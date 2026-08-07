@@ -22,6 +22,49 @@ export const verifyOtp = async (req: Request, res: Response, next: NextFunction)
   }
 };
 
+export const login = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { identifier, password } = req.body;
+    const result = await authService.loginWithPassword(identifier, password);
+    sendSuccess(res, 'Login successful', result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const register = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { userType, name, phone, email, password, schoolId, licenseNumber } = req.body;
+    const result = await authService.registerUser(userType, {
+      name, phone, email, password, schoolId, licenseNumber,
+    });
+    sendSuccess(res, 'User registered successfully', result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const activate = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { token, password } = req.body;
+    const result = await authService.activateAccount(token, password);
+    sendSuccess(res, result.message, { userType: result.userType });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const generateActivation = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const user = req.user;
+    if (!user) throw new Error('User not authenticated');
+    const url = await authService.generateActivationToken(user.userId, user.userType);
+    sendSuccess(res, 'Activation link generated', { activationUrl: url });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const refreshToken = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const authHeader = req.headers.authorization;
@@ -47,6 +90,16 @@ export const logout = async (req: Request, res: Response, next: NextFunction): P
       revokeToken(authHeader.split(' ')[1]);
     }
     sendSuccess(res, 'Logged out successfully');
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const setupPassword = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { phone, password } = req.body;
+    const result = await authService.setupPassword(phone, password);
+    sendSuccess(res, result.message, { userType: result.userType });
   } catch (error) {
     next(error);
   }

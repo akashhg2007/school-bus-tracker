@@ -6,7 +6,6 @@ import * as driverController from './driver.controller';
 
 const router = Router();
 
-// Validation rules
 const createDriverValidation = [
   body('name')
     .notEmpty()
@@ -27,6 +26,10 @@ const createDriverValidation = [
     .optional()
     .isEmail()
     .withMessage('Invalid email'),
+  body('password')
+    .optional()
+    .isLength({ min: 6 })
+    .withMessage('Password must be at least 6 characters'),
 ];
 
 const updateDriverValidation = [
@@ -46,13 +49,16 @@ const updateDriverValidation = [
     .optional()
     .isEmail()
     .withMessage('Invalid email'),
+  body('password')
+    .optional()
+    .isLength({ min: 6 })
+    .withMessage('Password must be at least 6 characters'),
   body('isActive')
     .optional()
     .isBoolean()
     .withMessage('isActive must be a boolean'),
 ];
 
-// Routes
 router.get('/', authenticate, authorize('ADMIN'), driverController.getDrivers);
 router.get('/profile', authenticate, authorize('DRIVER'), driverController.getDriverProfile);
 router.get('/:id', authenticate, authorize('ADMIN'), driverController.getDriverById);

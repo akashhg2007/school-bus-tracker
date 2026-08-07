@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
@@ -11,6 +12,8 @@ async function main() {
     console.log('Database already seeded - skipping');
     return;
   }
+
+  const defaultPassword = await bcrypt.hash('admin123', 10);
 
   // Create a school
   const school = await prisma.school.create({
@@ -51,6 +54,7 @@ async function main() {
       name: 'Ramesh Kumar',
       phone: '5555555555',
       licenseNumber: 'KA-2023-001',
+      password: defaultPassword,
       schoolId: school.id,
     },
   });
@@ -77,6 +81,7 @@ async function main() {
       name: 'Suresh Kumar',
       phone: '9876543210',
       email: 'suresh@example.com',
+      password: defaultPassword,
       schoolId: school.id,
     },
   });
@@ -89,6 +94,7 @@ async function main() {
       name: 'School Admin',
       phone: '7777777777',
       email: 'admin@greenvalley.edu.in',
+      password: defaultPassword,
       schoolId: school.id,
     },
   });
@@ -133,6 +139,12 @@ async function main() {
   console.log('Subscription created:', subscription.id);
 
   console.log('Database seeded successfully!');
+  console.log('');
+  console.log('=== DEFAULT CREDENTIALS ===');
+  console.log('Admin:   7777777777 / admin123');
+  console.log('Driver:  5555555555 / admin123');
+  console.log('Parent:  9876543210 / admin123');
+  console.log('===========================');
 }
 
 main()

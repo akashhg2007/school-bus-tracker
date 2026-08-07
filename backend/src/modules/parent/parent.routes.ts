@@ -23,6 +23,10 @@ const createParentValidation = [
     .optional()
     .isEmail()
     .withMessage('Invalid email'),
+  body('password')
+    .optional()
+    .isLength({ min: 6 })
+    .withMessage('Password must be at least 6 characters'),
 ];
 
 const updateParentValidation = [
@@ -40,6 +44,10 @@ const updateParentValidation = [
     .optional()
     .isEmail()
     .withMessage('Invalid email'),
+  body('password')
+    .optional()
+    .isLength({ min: 6 })
+    .withMessage('Password must be at least 6 characters'),
 ];
 
 // Routes

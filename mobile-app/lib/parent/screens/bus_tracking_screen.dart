@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -294,7 +294,7 @@ class _BusTrackingScreenState extends State<BusTrackingScreen> {
                                       if (_nextStopName != null && _nextStopEta != null) ...[
                                         const SizedBox(height: 2),
                                         Text(
-                                          'Next stop: $_nextStopName — ${_nextStopEta} min${_nextStopDistance != null ? ' · ${_nextStopDistance!.toStringAsFixed(1)} km' : ''}',
+                                          'Next stop: $_nextStopName â€” ${_nextStopEta} min${_nextStopDistance != null ? ' Â· ${_nextStopDistance!.toStringAsFixed(1)} km' : ''}',
                                           style: const TextStyle(color: AppColors.alertOrange, fontSize: 12),
                                         ),
                                       ],
@@ -372,6 +372,7 @@ class _BusTrackingScreenState extends State<BusTrackingScreen> {
                       ],
                     ),
                   ),
+                ),
                 ),
               ],
             ),

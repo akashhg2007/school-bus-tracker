@@ -16,7 +16,8 @@ const Parents: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingParent, setEditingParent] = useState<ParentUser | null>(null);
-  const [formData, setFormData] = useState({ name: '', phone: '', email: '' });
+  const [formData, setFormData] = useState({ name: '', phone: '', email: '', password: '' });
+  const [activationUrl, setActivationUrl] = useState<string | null>(null);
 
   const loadParents = async () => {
     try {
@@ -36,13 +37,15 @@ const Parents: React.FC = () => {
     e.preventDefault();
     try {
       if (editingParent) {
-        await api.put(`/parents/${editingParent.id}`, formData);
+        const updateData: any = { name: formData.name, phone: formData.phone, email: formData.email };
+        if (formData.password) updateData.password = formData.password;
+        await api.put(`/parents/${editingParent.id}`, updateData);
       } else {
         await api.post('/parents', formData);
       }
       setShowModal(false);
       setEditingParent(null);
-      setFormData({ name: '', phone: '', email: '' });
+      setFormData({ name: '', phone: '', email: '', password: '' });
       loadParents();
     } catch (error) {
       console.error('Error saving parent:', error);
@@ -51,7 +54,7 @@ const Parents: React.FC = () => {
 
   const handleEdit = (parent: ParentUser) => {
     setEditingParent(parent);
-    setFormData({ name: parent.name, phone: parent.phone, email: parent.email || '' });
+    setFormData({ name: parent.name, phone: parent.phone, email: parent.email || '', password: '' });
     setShowModal(true);
   };
 
@@ -62,6 +65,21 @@ const Parents: React.FC = () => {
       loadParents();
     } catch (error) {
       console.error('Error deleting parent:', error);
+    }
+  };
+
+  const handleGenerateActivation = async () => {
+    try {
+      const response = await api.post('/auth/generate-activation', {}, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      });
+      const url = response.data?.data?.activationUrl;
+      if (url) {
+        setActivationUrl(url);
+        navigator.clipboard.writeText(url);
+      }
+    } catch (error) {
+      console.error('Error generating activation link:', error);
     }
   };
 
@@ -78,12 +96,22 @@ const Parents: React.FC = () => {
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold text-gray-800">Parent Management</h1>
         <button
-          onClick={() => { setEditingParent(null); setFormData({ name: '', phone: '', email: '' }); setShowModal(true); }}
+          onClick={() => { setEditingParent(null); setFormData({ name: '', phone: '', email: '', password: '' }); setShowModal(true); }}
           className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
         >
           + Add Parent
         </button>
       </div>
+
+      {activationUrl && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-green-800">Activation link copied to clipboard!</p>
+            <p className="text-xs text-green-600 mt-1 break-all">{activationUrl}</p>
+          </div>
+          <button onClick={() => setActivationUrl(null)} className="text-green-600 hover:text-green-800 ml-4">✕</button>
+        </div>
+      )}
 
       <div className="bg-white rounded-lg shadow overflow-hidden">
         <table className="min-w-full divide-y divide-gray-200">
@@ -113,7 +141,8 @@ const Parents: React.FC = () => {
                   )}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                  <button onClick={() => handleEdit(parent)} className="text-blue-600 hover:text-blue-900 mr-4">Edit</button>
+                  <button onClick={() => handleEdit(parent)} className="text-blue-600 hover:text-blue-900 mr-3">Edit</button>
+                  <button onClick={() => handleGenerateActivation()} className="text-green-600 hover:text-green-900 mr-3">Activation</button>
                   <button onClick={() => handleDelete(parent.id)} className="text-red-600 hover:text-red-900">Delete</button>
                 </td>
               </tr>
@@ -142,8 +171,16 @@ const Parents: React.FC = () => {
                 <label className="block text-sm font-medium text-gray-700">Email</label>
                 <input type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} className="w-full border rounded-lg px-3 py-2" />
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Password {editingParent ? '(leave blank to keep current)' : ''}
+                </label>
+                <input type="password" value={formData.password} onChange={(e) => setFormData({ ...formData, password: e.target.value })} className="w-full border rounded-lg px-3 py-2" {...(!editingParent ? { required: true } : {})} placeholder={editingParent ? '••••••••' : 'Min 6 characters'} />
+              </div>
               <p className="text-xs text-gray-400">
-                Note: parents must verify with this phone number to log in.
+                {editingParent
+                  ? 'Leave password blank to keep the current password.'
+                  : 'Set a password for the parent to log in with email/phone + password.'}
               </p>
               <div className="flex justify-end space-x-2">
                 <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 border rounded-lg">Cancel</button>

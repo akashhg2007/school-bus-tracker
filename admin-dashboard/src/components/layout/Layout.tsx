@@ -37,96 +37,137 @@ const Layout: React.FC = () => {
     document.documentElement.classList.toggle('dark', next);
   };
 
+  const isActive = (path: string) => location.pathname === path;
+
   return (
-    <div className={`min-h-screen ${darkMode ? 'bg-gray-900' : 'bg-gray-100'}`}>
+    <div className={`min-h-screen ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
       {/* Sidebar */}
       <div
-        className={`fixed inset-y-0 left-0 z-50 w-64 shadow-lg transform transition-transform duration-300 ease-in-out ${
-          darkMode ? 'bg-gray-800' : 'bg-white'
-        } ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
+        className={`fixed inset-y-0 left-0 z-50 flex flex-col transition-all duration-300 ease-in-out ${
+          sidebarOpen ? 'w-64' : 'w-20'
+        } ${darkMode ? 'bg-gray-800 border-r border-gray-700' : 'bg-white border-r border-gray-100'} shadow-xl`}
       >
-        <div className={`flex items-center justify-center h-16 border-b ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
-          <div className="flex items-center space-x-2">
-            <div className="p-2 bg-blue-600 rounded-lg">
-              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        {/* Logo */}
+        <div className={`flex items-center h-16 px-4 ${sidebarOpen ? 'justify-start' : 'justify-center'}`}>
+          <div className="flex items-center gap-3">
+            <div className="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/25">
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
               </svg>
             </div>
-            <span className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-800'}`}>Bus Tracker</span>
+            {sidebarOpen && (
+              <span className={`text-lg font-bold ${darkMode ? 'text-white' : 'text-gray-800'}`}>BusTrack</span>
+            )}
           </div>
         </div>
 
-        <nav className="mt-6 px-4">
-          {menuItems.map((item) => (
-            <Link
-              key={item.path}
-              to={item.path}
-              className={`flex items-center px-4 py-3 mb-2 rounded-lg transition-colors ${
-                location.pathname === item.path
-                  ? 'bg-blue-50 text-blue-600 dark:bg-blue-900 dark:text-blue-400'
-                  : darkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              <svg
-                className={`w-5 h-5 mr-3 ${
-                  location.pathname === item.path ? 'text-blue-600 dark:text-blue-400' : darkMode ? 'text-gray-400' : 'text-gray-400'
-                }`}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
+        {/* Navigation */}
+        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+          {menuItems.map((item) => {
+            const active = isActive(item.path);
+            return (
+              <Link
+                key={item.path}
+                to={item.path}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
+                  active
+                    ? 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-lg shadow-blue-500/25'
+                    : darkMode
+                      ? 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                      : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                } ${!sidebarOpen ? 'justify-center' : ''}`}
+                title={!sidebarOpen ? item.label : undefined}
               >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon} />
-              </svg>
-              {item.label}
-            </Link>
-          ))}
+                <svg
+                  className={`w-5 h-5 flex-shrink-0 ${active ? 'text-white' : darkMode ? 'text-gray-400' : 'text-gray-400'}`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon} />
+                </svg>
+                {sidebarOpen && <span>{item.label}</span>}
+              </Link>
+            );
+          })}
         </nav>
+
+        {/* User section at bottom */}
+        <div className={`p-3 border-t ${darkMode ? 'border-gray-700' : 'border-gray-100'}`}>
+          {sidebarOpen ? (
+            <div className={`flex items-center gap-3 p-2 rounded-xl ${darkMode ? 'bg-gray-700' : 'bg-gray-50'}`}>
+              <div className="w-9 h-9 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center flex-shrink-0">
+                <span className="text-white font-semibold text-sm">{user?.name?.charAt(0) || 'A'}</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className={`text-sm font-medium truncate ${darkMode ? 'text-white' : 'text-gray-800'}`}>{user?.name}</p>
+                <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Admin</p>
+              </div>
+              <button
+                onClick={handleLogout}
+                className={`p-1.5 rounded-lg ${darkMode ? 'hover:bg-gray-600 text-gray-400' : 'hover:bg-gray-200 text-gray-400'} transition-colors`}
+                title="Logout"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={handleLogout}
+              className={`w-full flex items-center justify-center p-2 rounded-xl ${darkMode ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-100 text-gray-400'}`}
+              title="Logout"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Main Content */}
-      <div className={`transition-all duration-300 ${sidebarOpen ? 'ml-64' : 'ml-0'}`}>
+      <div className={`transition-all duration-300 ${sidebarOpen ? 'ml-64' : 'ml-20'}`}>
         {/* Header */}
-        <header className={`${darkMode ? 'bg-gray-800' : 'bg-white'} shadow-sm h-16 flex items-center justify-between px-6`}>
-          <button
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className={`p-2 rounded-lg ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}
-          >
-            <svg className={`w-6 h-6 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </button>
-
-          <div className="flex items-center space-x-4">
-            <button onClick={toggleDarkMode} className={`p-2 rounded-lg ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`} title="Toggle dark mode">
-              {darkMode ? '☀️' : '🌙'}
+        <header className={`sticky top-0 z-40 ${darkMode ? 'bg-gray-800/80 backdrop-blur-xl border-b border-gray-700' : 'bg-white/80 backdrop-blur-xl border-b border-gray-100'} h-16 flex items-center justify-between px-6`}>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className={`p-2 rounded-xl ${darkMode ? 'hover:bg-gray-700 text-gray-300' : 'hover:bg-gray-100 text-gray-600'} transition-colors`}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
             </button>
-            <button className={`p-2 rounded-lg relative ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}>
-              <svg className={`w-6 h-6 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className={`h-6 w-px ${darkMode ? 'bg-gray-700' : 'bg-gray-200'}`}></div>
+            <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+              {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={toggleDarkMode}
+              className={`p-2.5 rounded-xl ${darkMode ? 'hover:bg-gray-700 text-yellow-400' : 'hover:bg-gray-100 text-gray-500'} transition-colors`}
+              title="Toggle dark mode"
+            >
+              {darkMode ? (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+              ) : (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                </svg>
+              )}
+            </button>
+
+            <button className={`p-2.5 rounded-xl relative ${darkMode ? 'hover:bg-gray-700 text-gray-300' : 'hover:bg-gray-100 text-gray-500'} transition-colors`}>
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
               </svg>
-              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-            </button>
-
-            <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
-                <span className="text-white font-medium text-sm">
-                  {user?.name?.charAt(0) || 'A'}
-                </span>
-              </div>
-              <div className="hidden md:block">
-                <p className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-800'}`}>{user?.name}</p>
-                <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Admin</p>
-              </div>
-            </div>
-
-            <button
-              onClick={handleLogout}
-              className={`p-2 rounded-lg ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}
-              title="Logout"
-            >
-              <svg className={`w-5 h-5 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-              </svg>
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white"></span>
             </button>
           </div>
         </header>

@@ -39,6 +39,7 @@ model Admin {
   name          String
   phone         String         @unique
   email         String?
+  password      String?
   schoolId      String
   school        School         @relation(fields: [schoolId], references: [id])
   isActive      Int            @default(1)
@@ -55,6 +56,7 @@ model Driver {
   phone         String         @unique
   licenseNumber String         @unique
   email         String?
+  password      String?
   schoolId      String
   school        School         @relation(fields: [schoolId], references: [id])
   bus           Bus?
@@ -73,6 +75,7 @@ model Parent {
   name          String
   phone         String         @unique
   email         String?
+  password      String?
   schoolId      String
   school        School         @relation(fields: [schoolId], references: [id])
   students      Student[]

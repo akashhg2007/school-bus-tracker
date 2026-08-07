@@ -15,8 +15,7 @@ interface AuthContextType {
   token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (phone: string, otp: string) => Promise<boolean>;
-  sendOtp: (phone: string) => Promise<boolean>;
+  login: (identifier: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
 }
 
@@ -48,22 +47,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setIsLoading(false);
   }, []);
 
-  const sendOtp = async (phone: string): Promise<boolean> => {
-    try {
-      const response = await api.post('/auth/send-otp', { phone });
-      return response.status === 200;
-    } catch (error) {
-      console.error('Send OTP error:', error);
-      return false;
-    }
-  };
-
-  const login = async (phone: string, otp: string): Promise<boolean> => {
+  const login = async (identifier: string, password: string): Promise<{ success: boolean; error?: string }> => {
     try {
       setIsLoading(true);
-      
-      const response = await api.post('/auth/verify-otp', { phone, otp });
-      
+
+      const response = await api.post('/auth/login', { identifier, password });
+
       if (response.status === 200) {
         const data = response.data.data;
         const userData: User = {
@@ -74,20 +63,30 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           schoolId: data.user.schoolId,
           userType: data.user.userType,
         };
-        
+
         setToken(data.token);
         setUser(userData);
-        
+
         localStorage.setItem('token', data.token);
         localStorage.setItem('user', JSON.stringify(userData));
         api.defaults.headers.common['Authorization'] = `Bearer ${data.token}`;
-        
-        return true;
+
+        return { success: true };
       }
-      return false;
-    } catch (error) {
+      return { success: false, error: 'Login failed' };
+    } catch (error: any) {
       console.error('Login error:', error);
-      return false;
+      const msg = error?.response?.data?.message || error?.message || 'Login failed';
+      if (msg.includes('not found') || msg.includes('No account')) {
+        return { success: false, error: 'No account found with this email or phone number.' };
+      }
+      if (msg.includes('Invalid credentials')) {
+        return { success: false, error: 'Invalid email/phone or password.' };
+      }
+      if (msg.includes('not activated')) {
+        return { success: false, error: 'Account not activated. Please contact your school admin.' };
+      }
+      return { success: false, error: 'Login failed. Please try again.' };
     } finally {
       setIsLoading(false);
     }
@@ -109,7 +108,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         isAuthenticated: !!token && !!user,
         isLoading,
         login,
-        sendOtp,
         logout,
       }}
     >

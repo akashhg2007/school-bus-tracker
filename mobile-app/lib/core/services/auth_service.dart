@@ -56,10 +56,17 @@ class AuthService {
       if (response.statusCode == 200 || response.statusCode == 201) {
         return null;
       }
-      return 'Server responded with status ${response.statusCode}';
+      return 'Server error (${response.statusCode}). Please try again.';
     } catch (e) {
       debugPrint('Send OTP error: $e');
-      return 'Network error: $e';
+      final msg = e.toString();
+      if (msg.contains('timeout') || msg.contains('Timeout')) {
+        return 'Server is waking up. Please wait a moment and try again.';
+      }
+      if (msg.contains('Connection refused') || msg.contains('SocketException')) {
+        return 'Cannot reach server. Check your internet connection.';
+      }
+      return 'Network error. Please check your connection and try again.';
     }
   }
 
@@ -83,6 +90,59 @@ class AuthService {
     } catch (e) {
       debugPrint('Verify OTP error: $e');
       return false;
+    }
+  }
+
+  Future<String?> loginWithPassword(String identifier, String password) async {
+    try {
+      final api = ApiService();
+      final response = await api.loginWithPassword(identifier, password);
+      debugPrint('Login response status: ${response.statusCode}');
+      if (response.statusCode == 200) {
+        final data = response.data['data'];
+        _token = data['token'];
+        _user = Map<String, dynamic>.from(data['user']);
+        await api.setToken(_token!);
+        await _persistAuth();
+        await FirebaseService().registerIfAuthenticated();
+        return null;
+      }
+      return 'Login failed. Please try again.';
+    } catch (e) {
+      debugPrint('Login error: $e');
+      final msg = e.toString();
+      if (msg.contains('timeout') || msg.contains('Timeout')) {
+        return 'Server is waking up. Please wait a moment and try again.';
+      }
+      if (msg.contains('Connection refused') || msg.contains('SocketException')) {
+        return 'Cannot reach server. Check your internet connection.';
+      }
+      if (msg.contains('401') || msg.contains('Invalid credentials')) {
+        return 'Invalid email/phone or password.';
+      }
+      if (msg.contains('404') || msg.contains('not found')) {
+        return 'No account found with this email or phone number.';
+      }
+      return 'Network error. Please check your connection and try again.';
+    }
+  }
+
+  Future<String?> activateAccount(String token, String password) async {
+    try {
+      final api = ApiService();
+      final response = await api.activateAccount(token, password);
+      debugPrint('Activate response status: ${response.statusCode}');
+      if (response.statusCode == 200) {
+        return null;
+      }
+      return 'Activation failed. Please try again.';
+    } catch (e) {
+      debugPrint('Activate error: $e');
+      final msg = e.toString();
+      if (msg.contains('expired')) {
+        return 'Activation link has expired. Please request a new one.';
+      }
+      return 'Network error. Please check your connection and try again.';
     }
   }
 

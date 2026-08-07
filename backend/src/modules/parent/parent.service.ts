@@ -1,10 +1,12 @@
 import prisma from '../../config/database';
 import { NotFoundError, ConflictError } from '../../utils/errors';
+import { hashPassword } from '../../utils/password';
 
 interface CreateParentInput {
   name: string;
   phone: string;
   email?: string;
+  password?: string;
   schoolId: string;
 }
 
@@ -12,6 +14,7 @@ interface UpdateParentInput {
   name?: string;
   phone?: string;
   email?: string;
+  password?: string;
 }
 
 export const createParent = async (data: CreateParentInput) => {
@@ -20,17 +23,23 @@ export const createParent = async (data: CreateParentInput) => {
     throw new ConflictError('Parent with this phone already exists');
   }
 
-  return prisma.parent.create({
+  const hashedPassword = data.password ? await hashPassword(data.password) : null;
+
+  const parent = await prisma.parent.create({
     data: {
       name: data.name,
       phone: data.phone,
       email: data.email,
+      password: hashedPassword,
       schoolId: data.schoolId,
     },
     include: {
       _count: { select: { students: true } },
     },
   });
+
+  const { password, ...parentWithoutPassword } = parent as any;
+  return parentWithoutPassword;
 };
 
 export const getParentsBySchool = async (schoolId: string, page: number = 1, limit: number = 20) => {
@@ -39,7 +48,16 @@ export const getParentsBySchool = async (schoolId: string, page: number = 1, lim
   const [parents, total] = await Promise.all([
     prisma.parent.findMany({
       where: { schoolId, isActive: 1 },
-      include: {
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        email: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true,
+        schoolId: true,
+        fcmToken: true,
         _count: { select: { students: true } },
         students: {
           select: { id: true, name: true, rollNumber: true },
@@ -58,7 +76,16 @@ export const getParentsBySchool = async (schoolId: string, page: number = 1, lim
 export const getParentById = async (parentId: string) => {
   const parent = await prisma.parent.findUnique({
     where: { id: parentId },
-    include: {
+    select: {
+      id: true,
+      name: true,
+      phone: true,
+      email: true,
+      isActive: true,
+      createdAt: true,
+      updatedAt: true,
+      schoolId: true,
+      fcmToken: true,
       _count: { select: { students: true } },
       students: {
         select: { id: true, name: true, rollNumber: true },
@@ -92,13 +119,31 @@ export const updateParent = async (
     }
   }
 
-  return prisma.parent.update({
+  const updateData: any = { ...data };
+  if (updateData.password) {
+    updateData.password = await hashPassword(updateData.password);
+  } else {
+    delete updateData.password;
+  }
+
+  const updated = await prisma.parent.update({
     where: { id: parentId },
-    data,
-    include: {
+    data: updateData,
+    select: {
+      id: true,
+      name: true,
+      phone: true,
+      email: true,
+      isActive: true,
+      createdAt: true,
+      updatedAt: true,
+      schoolId: true,
+      fcmToken: true,
       _count: { select: { students: true } },
     },
   });
+
+  return updated;
 };
 
 export const deleteParent = async (parentId: string, schoolId?: string) => {

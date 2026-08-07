@@ -14,7 +14,7 @@ class ApiService {
     _dio = Dio(BaseOptions(
       baseUrl: AppConfig.apiBaseUrl,
       connectTimeout: const Duration(seconds: 30),
-      receiveTimeout: const Duration(seconds: 60),
+      receiveTimeout: const Duration(seconds: 120),
       headers: {
         'Content-Type': 'application/json',
       },
@@ -69,6 +69,14 @@ class ApiService {
 
   Future<Response> verifyOtp(String phone) {
     return dio.post('/auth/verify-otp', data: {'phone': phone});
+  }
+
+  Future<Response> loginWithPassword(String identifier, String password) {
+    return dio.post('/auth/login', data: {'identifier': identifier, 'password': password});
+  }
+
+  Future<Response> activateAccount(String token, String password) {
+    return dio.post('/auth/activate', data: {'token': token, 'password': password});
   }
 
   // Bus endpoints

@@ -1,11 +1,13 @@
 import prisma from '../../config/database';
 import { NotFoundError, ConflictError } from '../../utils/errors';
+import { hashPassword } from '../../utils/password';
 
 interface CreateDriverInput {
   name: string;
   phone: string;
   licenseNumber: string;
   email?: string;
+  password?: string;
   schoolId: string;
 }
 
@@ -14,11 +16,11 @@ interface UpdateDriverInput {
   phone?: string;
   licenseNumber?: string;
   email?: string;
+  password?: string;
   isActive?: boolean;
 }
 
 export const createDriver = async (data: CreateDriverInput) => {
-  // Check if phone already exists
   const existingPhone = await prisma.driver.findUnique({
     where: { phone: data.phone },
   });
@@ -27,7 +29,6 @@ export const createDriver = async (data: CreateDriverInput) => {
     throw new ConflictError('Phone number already registered');
   }
 
-  // Check if license number already exists
   const existingLicense = await prisma.driver.findUnique({
     where: { licenseNumber: data.licenseNumber },
   });
@@ -36,13 +37,27 @@ export const createDriver = async (data: CreateDriverInput) => {
     throw new ConflictError('License number already registered');
   }
 
+  const hashedPassword = data.password ? await hashPassword(data.password) : null;
+
   const driver = await prisma.driver.create({
     data: {
       name: data.name,
       phone: data.phone,
       licenseNumber: data.licenseNumber,
       email: data.email,
+      password: hashedPassword,
       schoolId: data.schoolId,
+    },
+    select: {
+      id: true,
+      name: true,
+      phone: true,
+      email: true,
+      licenseNumber: true,
+      schoolId: true,
+      isActive: true,
+      createdAt: true,
+      updatedAt: true,
     },
   });
 
@@ -55,7 +70,17 @@ export const getDriversBySchool = async (schoolId: string, page: number = 1, lim
   const [drivers, total] = await Promise.all([
     prisma.driver.findMany({
       where: { schoolId, isActive: 1 },
-      include: {
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        email: true,
+        licenseNumber: true,
+        schoolId: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true,
+        fcmToken: true,
         bus: {
           select: { id: true, busNumber: true, plateNumber: true },
         },
@@ -74,7 +99,17 @@ export const getDriversBySchool = async (schoolId: string, page: number = 1, lim
 export const getDriverById = async (driverId: string, schoolId?: string) => {
   const driver = await prisma.driver.findUnique({
     where: { id: driverId },
-    include: {
+    select: {
+      id: true,
+      name: true,
+      phone: true,
+      email: true,
+      licenseNumber: true,
+      schoolId: true,
+      isActive: true,
+      createdAt: true,
+      updatedAt: true,
+      fcmToken: true,
       bus: true,
       trips: {
         orderBy: { createdAt: 'desc' },
@@ -116,7 +151,6 @@ export const updateDriver = async (
     throw new NotFoundError('Driver not found');
   }
 
-  // Check for conflicts if updating phone
   if (data.phone && data.phone !== driver.phone) {
     const existingPhone = await prisma.driver.findUnique({
       where: { phone: data.phone },
@@ -127,7 +161,6 @@ export const updateDriver = async (
     }
   }
 
-  // Check for conflicts if updating license number
   if (data.licenseNumber && data.licenseNumber !== driver.licenseNumber) {
     const existingLicense = await prisma.driver.findUnique({
       where: { licenseNumber: data.licenseNumber },
@@ -138,16 +171,30 @@ export const updateDriver = async (
     }
   }
 
-    // Build update data
   const updateData: any = { ...data };
   if (updateData.isActive !== undefined) {
     updateData.isActive = updateData.isActive ? 1 : 0;
+  }
+  if (updateData.password) {
+    updateData.password = await hashPassword(updateData.password);
+  } else {
+    delete updateData.password;
   }
 
   const updatedDriver = await prisma.driver.update({
     where: { id: driverId },
     data: updateData,
-    include: {
+    select: {
+      id: true,
+      name: true,
+      phone: true,
+      email: true,
+      licenseNumber: true,
+      schoolId: true,
+      isActive: true,
+      createdAt: true,
+      updatedAt: true,
+      fcmToken: true,
       bus: true,
     },
   });
@@ -168,7 +215,6 @@ export const deleteDriver = async (driverId: string, schoolId?: string) => {
     throw new NotFoundError('Driver not found');
   }
 
-  // Soft delete
   await prisma.driver.update({
     where: { id: driverId },
     data: { isActive: 0 },
@@ -180,7 +226,17 @@ export const deleteDriver = async (driverId: string, schoolId?: string) => {
 export const getDriverProfile = async (driverId: string) => {
   const driver = await prisma.driver.findUnique({
     where: { id: driverId },
-    include: {
+    select: {
+      id: true,
+      name: true,
+      phone: true,
+      email: true,
+      licenseNumber: true,
+      schoolId: true,
+      isActive: true,
+      createdAt: true,
+      updatedAt: true,
+      fcmToken: true,
       school: {
         select: { id: true, name: true, address: true, phone: true },
       },

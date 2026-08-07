@@ -4,19 +4,21 @@ import cors from 'cors';
 
 // Rate limiting middleware
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 50, // limit each IP to 50 requests per windowMs
+  windowMs: 15 * 60 * 1000,
+  max: 50,
   message: 'Too many authentication attempts, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false },
 });
 
 const generalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 500, // limit each IP to 500 requests per windowMs
+  windowMs: 15 * 60 * 1000,
+  max: 500,
   message: 'Too many requests, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false },
 });
 
 // Security headers middleware
