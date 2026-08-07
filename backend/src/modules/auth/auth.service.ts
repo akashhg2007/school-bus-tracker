@@ -46,18 +46,56 @@ interface RegisterResult {
 
 const OTP_TTL_MS = 5 * 60 * 1000;
 const MAX_ATTEMPTS = 5;
+const LOGIN_LOCKOUT_MS = 15 * 60 * 1000;
+const MAX_LOGIN_ATTEMPTS = 5;
 const otpStore = new Map<string, { code: string; expiresAt: number; attempts: number }>();
 
 const ACTIVATION_TTL_MS = 24 * 60 * 60 * 1000;
 const activationStore = new Map<string, { userId: string; userType: string; expiresAt: number }>();
 
+const loginAttempts = new Map<string, { count: number; lockedUntil: number }>();
+
 const isProduction = (): boolean => process.env.NODE_ENV === 'production';
+
+// Cleanup expired entries every 10 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of otpStore) {
+    if (now > entry.expiresAt) otpStore.delete(key);
+  }
+  for (const [key, entry] of activationStore) {
+    if (now > entry.expiresAt) activationStore.delete(key);
+  }
+  for (const [key, entry] of loginAttempts) {
+    if (now > entry.lockedUntil) loginAttempts.delete(key);
+  }
+}, 10 * 60 * 1000);
 
 const constantTimeCompare = (a: string, b: string): boolean => {
   if (a.length !== b.length) return false;
-  const bufA = Buffer.from(a);
-  const bufB = Buffer.from(b);
-  return require('crypto').timingSafeEqual(bufA, bufB);
+  const bufA = Buffer.from(a.padEnd(64, '\0'));
+  const bufB = Buffer.from(b.padEnd(64, '\0'));
+  return crypto.timingSafeEqual(bufA, bufB);
+};
+
+const isLockedOut = (identifier: string): boolean => {
+  const entry = loginAttempts.get(identifier);
+  if (!entry) return false;
+  if (Date.now() > entry.lockedUntil) {
+    loginAttempts.delete(identifier);
+    return false;
+  }
+  return true;
+};
+
+const recordFailedLogin = (identifier: string): void => {
+  const entry = loginAttempts.get(identifier) || { count: 0, lockedUntil: 0 };
+  entry.count += 1;
+  if (entry.count >= MAX_LOGIN_ATTEMPTS) {
+    entry.lockedUntil = Date.now() + LOGIN_LOCKOUT_MS;
+    entry.count = 0;
+  }
+  loginAttempts.set(identifier, entry);
 };
 
 const isValidPhone = (phone: string): boolean => /^\+?[1-9]\d{6,14}$/.test(phone);
@@ -187,6 +225,10 @@ export const loginWithPassword = async (
   identifier: string,
   password: string
 ): Promise<LoginResult> => {
+  if (isLockedOut(identifier)) {
+    throw new UnauthorizedError('Account temporarily locked due to too many failed attempts. Please try again later.');
+  }
+
   const whereClause = {
     OR: [
       { phone: identifier },
@@ -206,8 +248,10 @@ export const loginWithPassword = async (
     }
     const valid = await comparePassword(password, parent.password);
     if (!valid) {
+      recordFailedLogin(identifier);
       throw new UnauthorizedError('Invalid credentials');
     }
+    loginAttempts.delete(identifier);
     const payload: AuthPayload = {
       userId: parent.id,
       userType: 'PARENT',
@@ -239,8 +283,10 @@ export const loginWithPassword = async (
     }
     const valid = await comparePassword(password, driver.password);
     if (!valid) {
+      recordFailedLogin(identifier);
       throw new UnauthorizedError('Invalid credentials');
     }
+    loginAttempts.delete(identifier);
     const payload: AuthPayload = {
       userId: driver.id,
       userType: 'DRIVER',
@@ -272,8 +318,10 @@ export const loginWithPassword = async (
     }
     const valid = await comparePassword(password, admin.password);
     if (!valid) {
+      recordFailedLogin(identifier);
       throw new UnauthorizedError('Invalid credentials');
     }
+    loginAttempts.delete(identifier);
     const payload: AuthPayload = {
       userId: admin.id,
       userType: 'ADMIN',

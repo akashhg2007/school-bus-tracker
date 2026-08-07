@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../config/app_config.dart';
@@ -9,12 +10,18 @@ class ApiService {
 
   Dio? _dio;
   String? _token;
+  SharedPreferences? _prefs;
+
+  Future<SharedPreferences> get _sharedPrefs async {
+    _prefs ??= await SharedPreferences.getInstance();
+    return _prefs!;
+  }
 
   void init() {
     _dio = Dio(BaseOptions(
       baseUrl: AppConfig.apiBaseUrl,
-      connectTimeout: const Duration(seconds: 30),
-      receiveTimeout: const Duration(seconds: 120),
+      connectTimeout: const Duration(seconds: 15),
+      receiveTimeout: const Duration(seconds: 30),
       headers: {
         'Content-Type': 'application/json',
       },
@@ -27,9 +34,22 @@ class ApiService {
         }
         return handler.next(options);
       },
-      onError: (error, handler) {
+      onError: (error, handler) async {
         if (error.response?.statusCode == 401) {
           clearToken();
+        }
+        final isTimeout = error.type == DioExceptionType.connectionTimeout ||
+            error.type == DioExceptionType.receiveTimeout;
+        if (isTimeout) {
+          final count = error.requestOptions.extra['retryCount'] as int? ?? 0;
+          if (count < 3) {
+            error.requestOptions.extra['retryCount'] = count + 1;
+            await Future.delayed(Duration(seconds: count + 1));
+            try {
+              final response = await _dio!.fetch(error.requestOptions);
+              return handler.resolve(response);
+            } catch (_) {}
+          }
         }
         return handler.next(error);
       },
@@ -38,20 +58,20 @@ class ApiService {
 
   Future<void> setToken(String token) async {
     _token = token;
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _sharedPrefs;
     await prefs.setString('auth_token', token);
   }
 
   Future<String?> getToken() async {
     if (_token != null) return _token;
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _sharedPrefs;
     _token = prefs.getString('auth_token');
     return _token;
   }
 
   Future<void> clearToken() async {
     _token = null;
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _sharedPrefs;
     await prefs.remove('auth_token');
   }
 
@@ -62,7 +82,6 @@ class ApiService {
     return _dio!;
   }
 
-  // Auth endpoints
   Future<Response> sendOtp(String phone) {
     return dio.post('/auth/send-otp', data: {'phone': phone});
   }
@@ -79,7 +98,6 @@ class ApiService {
     return dio.post('/auth/activate', data: {'token': token, 'password': password});
   }
 
-  // Bus endpoints
   Future<Response> getBuses({int page = 1, int limit = 10}) {
     return dio.get('/buses', queryParameters: {'page': page, 'limit': limit});
   }
@@ -92,7 +110,6 @@ class ApiService {
     return dio.get('/buses/$busId/live-location');
   }
 
-  // Student endpoints
   Future<Response> getStudents({int page = 1, int limit = 10}) {
     return dio.get('/students', queryParameters: {'page': page, 'limit': limit});
   }
@@ -101,7 +118,6 @@ class ApiService {
     return dio.get('/students/my-children');
   }
 
-  // Trip endpoints
   Future<Response> getActiveTrips() {
     return dio.get('/trips/active');
   }
@@ -118,7 +134,6 @@ class ApiService {
     return dio.post('/trips/$tripId/end');
   }
 
-  // Attendance endpoints
   Future<Response> markBoarding(String studentId, String tripId) {
     return dio.post('/attendance/board', data: {'studentId': studentId, 'tripId': tripId});
   }
@@ -131,7 +146,6 @@ class ApiService {
     return dio.get('/attendance/trip/$tripId');
   }
 
-  // Location endpoints
   Future<Response> updateLocation(String tripId, double latitude, double longitude, {
     double? speed,
     double? heading,
@@ -144,14 +158,13 @@ class ApiService {
       'speed': speed,
       'heading': heading,
       'accuracy': accuracy,
-    });
+    }, options: Options(receiveTimeout: const Duration(seconds: 10)));
   }
 
   Future<Response> getFleetLocations() {
     return dio.get('/location/fleet');
   }
 
-  // Notification endpoints
   Future<Response> getNotifications({int page = 1, int limit = 20}) {
     return dio.get('/notifications', queryParameters: {'page': page, 'limit': limit});
   }
@@ -164,22 +177,18 @@ class ApiService {
     return dio.put('/notifications/read-all');
   }
 
-  // Route endpoints
   Future<Response> getRoutes({int page = 1, int limit = 10}) {
     return dio.get('/routes', queryParameters: {'page': page, 'limit': limit});
   }
 
-  // Driver endpoints
   Future<Response> getDriverProfile() {
     return dio.get('/drivers/profile');
   }
 
-  // FCM Token
   Future<Response> sendFcmToken(String fcmToken) {
     return dio.post('/auth/fcm-token', data: {'fcmToken': fcmToken});
   }
 
-  // Leave request endpoints
   Future<Response> createLeaveRequest(String studentId, String date, {String reason = ''}) {
     return dio.post('/leaves', data: {'studentId': studentId, 'date': date, 'reason': reason});
   }
@@ -188,12 +197,10 @@ class ApiService {
     return dio.get('/leaves');
   }
 
-  // Incident report (drivers)
   Future<Response> reportIncident(String tripId, String type, {String details = ''}) {
     return dio.post('/notifications/incident-report', data: {'tripId': tripId, 'type': type, 'details': details});
   }
 
-  // Announcement endpoints
   Future<Response> getAnnouncements({int page = 1, int limit = 20}) {
     return dio.get('/announcements', queryParameters: {'page': page, 'limit': limit});
   }

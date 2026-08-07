@@ -3,6 +3,9 @@ import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'api_service.dart';
 import 'firebase_service.dart';
+import 'socket_service.dart';
+import 'location_service.dart';
+import 'notification_service.dart';
 
 class AuthService {
   static final AuthService _instance = AuthService._internal();
@@ -159,5 +162,8 @@ class AuthService {
     await _secureStorage.delete(key: 'auth_user');
     final api = ApiService();
     await api.clearToken();
+    SocketService().disconnect();
+    LocationService().stopTracking();
+    NotificationService().dispose();
   }
 }

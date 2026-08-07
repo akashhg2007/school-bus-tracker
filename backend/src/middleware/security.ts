@@ -69,13 +69,21 @@ const corsOptions = cors({
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  exposedHeaders: ['Content-Range', 'X-Total-Count'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id'],
+  exposedHeaders: ['Content-Range', 'X-Total-Count', 'X-Request-Id'],
+  maxAge: 86400,
 });
+
+const cacheHeaders = (req: any, res: any, next: any) => {
+  if (req.method === 'GET' && req.path.startsWith('/api')) {
+    res.set('Cache-Control', 'private, no-cache, no-store, must-revalidate');
+  }
+  next();
+};
 
 const requestId = (req: any, _res: any, next: any) => {
   req.headers['x-request-id'] = req.headers['x-request-id'] || randomUUID();
   next();
 };
 
-export { authLimiter, otpLimiter, generalLimiter, securityHeaders, corsOptions, requestId };
+export { authLimiter, otpLimiter, generalLimiter, securityHeaders, corsOptions, requestId, cacheHeaders };

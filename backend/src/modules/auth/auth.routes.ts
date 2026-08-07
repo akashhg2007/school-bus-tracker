@@ -50,7 +50,9 @@ const registerValidation = [
     .withMessage('User type must be PARENT, DRIVER, or ADMIN'),
   body('name')
     .notEmpty()
-    .withMessage('Name is required'),
+    .withMessage('Name is required')
+    .isLength({ min: 1, max: 100 })
+    .withMessage('Name must be 1-100 characters'),
   body('phone')
     .notEmpty()
     .withMessage('Phone number is required')
@@ -63,11 +65,13 @@ const registerValidation = [
   body('password')
     .notEmpty()
     .withMessage('Password is required')
-    .isLength({ min: 8 })
-    .withMessage('Password must be at least 8 characters'),
+    .isLength({ min: 8, max: 128 })
+    .withMessage('Password must be 8-128 characters'),
   body('schoolId')
     .notEmpty()
-    .withMessage('School ID is required'),
+    .withMessage('School ID is required')
+    .isUUID()
+    .withMessage('School ID must be a valid UUID'),
   body('licenseNumber')
     .if(body('userType').equals('DRIVER'))
     .notEmpty()
@@ -77,12 +81,14 @@ const registerValidation = [
 const activateValidation = [
   body('token')
     .notEmpty()
-    .withMessage('Activation token is required'),
+    .withMessage('Activation token is required')
+    .isLength({ min: 32 })
+    .withMessage('Invalid activation token'),
   body('password')
     .notEmpty()
     .withMessage('Password is required')
-    .isLength({ min: 8 })
-    .withMessage('Password must be at least 8 characters'),
+    .isLength({ min: 8, max: 128 })
+    .withMessage('Password must be 8-128 characters'),
 ];
 
 const fcmTokenValidation = [

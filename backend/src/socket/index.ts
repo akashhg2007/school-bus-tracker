@@ -19,8 +19,8 @@ export const initializeSocket = (httpServer: HttpServer): Server => {
       methods: ['GET', 'POST'],
     },
     maxHttpBufferSize: 1e6,
-    pingTimeout: 60000,
-    pingInterval: 25000,
+    pingTimeout: 30000,
+    pingInterval: 20000,
   });
 
   io.use((socket: Socket, next) => {

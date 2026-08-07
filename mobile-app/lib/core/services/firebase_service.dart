@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
@@ -11,6 +12,8 @@ class FirebaseService {
 
   bool _enabled = false;
   String? _token;
+  StreamSubscription? _tokenRefreshSub;
+  StreamSubscription? _onMessageSub;
 
   bool get isEnabled => _enabled;
 
@@ -29,12 +32,14 @@ class FirebaseService {
       final settings = await messaging.requestPermission();
       debugPrint('FCM permission: ${settings.authorizationStatus}');
 
-      messaging.onTokenRefresh.listen((newToken) {
+      _tokenRefreshSub?.cancel();
+      _tokenRefreshSub = messaging.onTokenRefresh.listen((newToken) {
         _token = newToken;
         _maybeRegister();
       });
 
-      FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      _onMessageSub?.cancel();
+      _onMessageSub = FirebaseMessaging.onMessage.listen((RemoteMessage message) {
         debugPrint('FCM foreground message: ${message.notification?.title}');
       });
 
@@ -50,6 +55,11 @@ class FirebaseService {
 
   Future<void> registerIfAuthenticated() async {
     await _maybeRegister();
+  }
+
+  void dispose() {
+    _tokenRefreshSub?.cancel();
+    _onMessageSub?.cancel();
   }
 
   Future<void> _maybeRegister() async {

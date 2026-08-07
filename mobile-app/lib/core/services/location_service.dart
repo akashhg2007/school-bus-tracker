@@ -19,6 +19,7 @@ class LocationService {
   Timer? _sendTimer;
   bool _isTracking = false;
   String? _currentTripId;
+  bool _isHighAccuracy = true;
 
   Position? _lastFix;
   DateTime? _lastFixAt;
@@ -41,6 +42,30 @@ class LocationService {
   bool get _hasFreshFix {
     if (_lastFixAt == null) return false;
     return DateTime.now().difference(_lastFixAt!) < const Duration(seconds: 30);
+  }
+
+  void setHighAccuracy(bool high) {
+    _isHighAccuracy = high;
+    if (_isTracking) {
+      _positionSub?.cancel();
+      _positionSub = Geolocator.getPositionStream(
+        locationSettings: LocationSettings(
+          accuracy: high ? LocationAccuracy.high : LocationAccuracy.low,
+          distanceFilter: high ? AppConfig.locationUpdateDistance : AppConfig.locationUpdateDistance * 3,
+        ),
+      ).listen(
+        _onPosition,
+        onError: (Object error) {
+          debugPrint('Position stream error: $error');
+          _emitStatus();
+        },
+        onDone: () {
+          debugPrint('Position stream closed');
+          _emitStatus();
+        },
+        cancelOnError: false,
+      );
+    }
   }
 
   Future<bool> checkAndRequestPermission() async {
@@ -112,9 +137,9 @@ class LocationService {
     }
 
     _positionSub = Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
-        distanceFilter: AppConfig.locationUpdateDistance,
+      locationSettings: LocationSettings(
+        accuracy: _isHighAccuracy ? LocationAccuracy.high : LocationAccuracy.low,
+        distanceFilter: _isHighAccuracy ? AppConfig.locationUpdateDistance : AppConfig.locationUpdateDistance * 3,
       ),
     ).listen(
       _onPosition,
@@ -130,7 +155,7 @@ class LocationService {
     );
 
     _sendTimer = Timer.periodic(
-      const Duration(seconds: AppConfig.locationUpdateInterval),
+      Duration(seconds: _isHighAccuracy ? AppConfig.locationUpdateInterval : AppConfig.locationUpdateInterval * 3),
       (_) => _sendLatest(),
     );
 

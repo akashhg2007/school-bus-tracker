@@ -33,13 +33,20 @@ export const createParent = async (data: CreateParentInput) => {
       password: hashedPassword,
       schoolId: data.schoolId,
     },
-    include: {
+    select: {
+      id: true,
+      name: true,
+      phone: true,
+      email: true,
+      isActive: true,
+      createdAt: true,
+      updatedAt: true,
+      schoolId: true,
       _count: { select: { students: true } },
     },
   });
 
-  const { password, ...parentWithoutPassword } = parent as any;
-  return parentWithoutPassword;
+  return parent;
 };
 
 export const getParentsBySchool = async (schoolId: string, page: number = 1, limit: number = 20) => {

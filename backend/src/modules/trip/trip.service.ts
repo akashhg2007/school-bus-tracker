@@ -10,9 +10,9 @@ const notifyBusParents = async (busId: string, title: string, body: string, data
       select: { parentId: true },
     });
     const parentIds = [...new Set(students.map((s) => s.parentId))];
-    for (const parentId of parentIds) {
-      await sendNotification({ userId: parentId, userType: 'PARENT', title, body, data });
-    }
+    await Promise.allSettled(
+      parentIds.map((parentId) => sendNotification({ userId: parentId, userType: 'PARENT', title, body, data }))
+    );
   } catch (error) {
     console.error('Failed to notify bus parents:', error);
   }
@@ -25,29 +25,29 @@ interface StartTripInput {
 }
 
 export const startTrip = async (data: StartTripInput) => {
-  const bus = await prisma.bus.findUnique({
-    where: { id: data.busId },
-    include: {
-      driver: true,
-      route: {
-        include: {
-          stops: {
-            orderBy: { order: 'asc' },
+  const trip = await prisma.$transaction(async (tx) => {
+    const bus = await tx.bus.findUnique({
+      where: { id: data.busId },
+      include: {
+        driver: true,
+        route: {
+          include: {
+            stops: {
+              orderBy: { order: 'asc' },
+            },
           },
         },
       },
-    },
-  });
+    });
 
-  if (!bus) {
-    throw new NotFoundError('Bus not found');
-  }
+    if (!bus) {
+      throw new NotFoundError('Bus not found');
+    }
 
-  if (bus.driverId !== data.driverId) {
-    throw new BadRequestError('Driver is not assigned to this bus');
-  }
+    if (bus.driverId !== data.driverId) {
+      throw new BadRequestError('Driver is not assigned to this bus');
+    }
 
-  const trip = await prisma.$transaction(async (tx) => {
     const activeTrip = await tx.trip.findFirst({
       where: {
         busId: data.busId,
@@ -59,7 +59,7 @@ export const startTrip = async (data: StartTripInput) => {
       throw new BadRequestError('Bus already has an active trip');
     }
 
-    return tx.trip.create({
+    const createdTrip = await tx.trip.create({
       data: {
         busId: data.busId,
         driverId: data.driverId,
@@ -72,10 +72,14 @@ export const startTrip = async (data: StartTripInput) => {
         driver: true,
       },
     });
+
+    return { trip: createdTrip, bus };
   });
 
+  const { trip: createdTrip, bus } = trip;
+
   emitToRoom(`school:${bus.schoolId}`, 'trip:started', {
-    tripId: trip.id,
+    tripId: createdTrip.id,
     busId: bus.id,
     busNumber: bus.busNumber,
     driverName: bus.driver?.name,
@@ -91,7 +95,7 @@ export const startTrip = async (data: StartTripInput) => {
     type: data.type,
   });
 
-  return trip;
+  return createdTrip;
 };
 
 export const endTrip = async (tripId: string) => {

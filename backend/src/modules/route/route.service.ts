@@ -87,9 +87,14 @@ export const getRoutesBySchool = async (schoolId: string, page: number = 1, limi
   return { routes, total, page, limit };
 };
 
-export const getRouteById = async (routeId: string) => {
-  const route = await prisma.route.findUnique({
-    where: { id: routeId },
+export const getRouteById = async (routeId: string, schoolId?: string) => {
+  const whereClause: any = { id: routeId };
+  if (schoolId) {
+    whereClause.schoolId = schoolId;
+  }
+
+  const route = await prisma.route.findFirst({
+    where: whereClause,
     include: {
       stops: {
         orderBy: { order: 'asc' },
@@ -210,39 +215,41 @@ export const updateStop = async (stopId: string, data: UpdateStopInput) => {
     throw new NotFoundError('Stop not found');
   }
 
-  // If updating order, adjust other stops
   if (data.order && data.order !== stop.order) {
-    const routeStops = await prisma.stop.findMany({
-      where: { routeId: stop.routeId },
-      orderBy: { order: 'asc' },
+    const targetOrder = data.order;
+    return prisma.$transaction(async (tx) => {
+      const routeStops = await tx.stop.findMany({
+        where: { routeId: stop.routeId },
+        orderBy: { order: 'asc' },
+      });
+
+      for (const rs of routeStops) {
+        if (rs.id === stopId) continue;
+
+        let newOrder = rs.order;
+        if (targetOrder < stop.order) {
+          if (rs.order >= targetOrder && rs.order < stop.order) {
+            newOrder = rs.order + 1;
+          }
+        } else {
+          if (rs.order > stop.order && rs.order <= targetOrder) {
+            newOrder = rs.order - 1;
+          }
+        }
+
+        if (newOrder !== rs.order) {
+          await tx.stop.update({
+            where: { id: rs.id },
+            data: { order: newOrder },
+          });
+        }
+      }
+
+      return tx.stop.update({
+        where: { id: stopId },
+        data,
+      });
     });
-
-    // Reorder stops
-    for (let i = 0; i < routeStops.length; i++) {
-      if (routeStops[i].id === stopId) {
-        continue;
-      }
-
-      let newOrder = routeStops[i].order;
-      if (data.order < stop.order) {
-        // Moving up
-        if (routeStops[i].order >= data.order && routeStops[i].order < stop.order) {
-          newOrder = routeStops[i].order + 1;
-        }
-      } else {
-        // Moving down
-        if (routeStops[i].order > stop.order && routeStops[i].order <= data.order) {
-          newOrder = routeStops[i].order - 1;
-        }
-      }
-
-      if (newOrder !== routeStops[i].order) {
-        await prisma.stop.update({
-          where: { id: routeStops[i].id },
-          data: { order: newOrder },
-        });
-      }
-    }
   }
 
   const updatedStop = await prisma.stop.update({
@@ -269,28 +276,27 @@ export const deleteStop = async (stopId: string) => {
     throw new ConflictError('Cannot delete stop with assigned students');
   }
 
-  // Get all stops in the route to reorder
-  const routeStops = await prisma.stop.findMany({
-    where: { routeId: stop.routeId },
-    orderBy: { order: 'asc' },
-  });
+  return prisma.$transaction(async (tx) => {
+    const routeStops = await tx.stop.findMany({
+      where: { routeId: stop.routeId },
+      orderBy: { order: 'asc' },
+    });
 
-  await prisma.stop.delete({
-    where: { id: stopId },
-  });
+    await tx.stop.delete({
+      where: { id: stopId },
+    });
 
-  // Reorder remaining stops
-  for (let i = 0; i < routeStops.length; i++) {
-    if (routeStops[i].id !== stopId) {
+    const remaining = routeStops.filter((s) => s.id !== stopId);
+    for (let i = 0; i < remaining.length; i++) {
       const newOrder = i + 1;
-      if (routeStops[i].order !== newOrder) {
-        await prisma.stop.update({
-          where: { id: routeStops[i].id },
+      if (remaining[i].order !== newOrder) {
+        await tx.stop.update({
+          where: { id: remaining[i].id },
           data: { order: newOrder },
         });
       }
     }
-  }
 
-  return { message: 'Stop deleted successfully' };
+    return { message: 'Stop deleted successfully' };
+  });
 };

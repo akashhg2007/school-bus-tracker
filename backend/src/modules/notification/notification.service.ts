@@ -97,7 +97,11 @@ export const sendBulkNotification = async (
         console.error('Socket emit failed for bulk notification:', error);
       }
     }
-    if (user.userType === 'PARENT' || user.userType === 'DRIVER') {
+  }
+
+  const fcmTargets = userIds.filter((u) => u.userType === 'PARENT' || u.userType === 'DRIVER');
+  await Promise.allSettled(
+    fcmTargets.map(async (user) => {
       try {
         const token = await getFcmToken(user.userType, user.userId);
         if (token) await sendPush(token, { title, body, data });
@@ -106,15 +110,17 @@ export const sendBulkNotification = async (
           console.error('FCM push failed for bulk:', error);
         }
       }
-    }
-  }
+    })
+  );
 
   return notifications;
 };
 
 export const sendSchoolNotification = async (schoolId: string, title: string, body: string, data?: Record<string, any>) => {
-  const parents = await prisma.parent.findMany({ where: { schoolId }, select: { id: true } });
-  const drivers = await prisma.driver.findMany({ where: { schoolId }, select: { id: true } });
+  const [parents, drivers] = await Promise.all([
+    prisma.parent.findMany({ where: { schoolId }, select: { id: true } }),
+    prisma.driver.findMany({ where: { schoolId }, select: { id: true } }),
+  ]);
 
   const userIds = [
     ...parents.map((p) => ({ userId: p.id, userType: 'PARENT' as const })),

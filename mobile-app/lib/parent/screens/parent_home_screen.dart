@@ -36,6 +36,12 @@ class _ParentHomeScreenState extends State<ParentHomeScreen> {
     _getUserLocation();
   }
 
+  @override
+  void dispose() {
+    _mapController.dispose();
+    super.dispose();
+  }
+
   Future<void> _getUserLocation() async {
     try {
       final location = await LocationService().getCurrentLatLng();
@@ -101,10 +107,12 @@ class _ParentHomeScreenState extends State<ParentHomeScreen> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
-              AuthService().logout();
-              Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => LoginScreen()));
+              await AuthService().logout();
+              if (mounted) {
+                Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => LoginScreen()));
+              }
             },
             child: const Text('Logout', style: TextStyle(color: AppColors.dangerRed)),
           ),
@@ -115,14 +123,13 @@ class _ParentHomeScreenState extends State<ParentHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final auth = AuthService();
     return Scaffold(
       appBar: AppBar(
         title: const Text('School Bus Tracker'),
         actions: [
           IconButton(
             icon: const Icon(Icons.notifications),
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const NotificationsScreen())),
+            onPressed: () => Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(builder: (context) => const NotificationsScreen())),
           ),
           IconButton(
             icon: const Icon(Icons.logout),
@@ -152,11 +159,8 @@ class _ParentHomeScreenState extends State<ParentHomeScreen> {
         await _loadChildren();
         await _getUserLocation();
       },
-      child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
+      child: ListView(
         padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Card(
             child: Padding(
@@ -197,14 +201,14 @@ class _ParentHomeScreenState extends State<ParentHomeScreen> {
                   final child = _children.first;
                   final bus = child['bus'];
                   if (bus != null) {
-                    Navigator.push(context, MaterialPageRoute(builder: (context) => BusTrackingScreen(busId: bus['id'], busNumber: bus['busNumber'])));
+                    Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(builder: (context) => BusTrackingScreen(busId: bus['id'], busNumber: bus['busNumber'])));
                   }
                 }
               })),
               const SizedBox(width: 12),
               Expanded(child: _buildActionCard(icon: Icons.route, title: 'View Route', color: AppColors.safeGreen, onTap: () => setState(() => _currentIndex = 1))),
               const SizedBox(width: 12),
-              Expanded(child: _buildActionCard(icon: Icons.event_busy, title: 'Leave', color: AppColors.dangerRed, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const LeaveRequestScreen())))),
+              Expanded(child: _buildActionCard(icon: Icons.event_busy, title: 'Leave', color: AppColors.dangerRed, onTap: () => Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(builder: (context) => const LeaveRequestScreen())))),
             ],
           ),
           const SizedBox(height: 16),
@@ -241,7 +245,6 @@ class _ParentHomeScreenState extends State<ParentHomeScreen> {
               );
             }),
         ],
-      ),
       ),
     );
   }
@@ -288,7 +291,7 @@ class _ParentHomeScreenState extends State<ParentHomeScreen> {
                             return ListTile(
                               leading: const CircleAvatar(child: Icon(Icons.child_care)),
                               title: Text(child['name'] ?? ''),
-                              subtitle: Text('Bus: ${bus?['busNumber'] ?? 'N/A'} • Stop: ${stop?['name'] ?? 'N/A'}'),
+                              subtitle: Text('Bus: ${bus?['busNumber'] ?? 'N/A'} \u2022 Stop: ${stop?['name'] ?? 'N/A'}'),
                             );
                           },
                         ),
@@ -297,9 +300,9 @@ class _ParentHomeScreenState extends State<ParentHomeScreen> {
               ),
             );
           }),
-          _buildProfileMenuItem(icon: Icons.event_busy, title: 'Leave Requests', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const LeaveRequestScreen()))),
-          _buildProfileMenuItem(icon: Icons.campaign, title: 'Announcements', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const AnnouncementsScreen()))),
-          _buildProfileMenuItem(icon: Icons.notifications, title: 'Notifications', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const NotificationsScreen()))),
+          _buildProfileMenuItem(icon: Icons.event_busy, title: 'Leave Requests', onTap: () => Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(builder: (context) => const LeaveRequestScreen()))),
+          _buildProfileMenuItem(icon: Icons.campaign, title: 'Announcements', onTap: () => Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(builder: (context) => const AnnouncementsScreen()))),
+          _buildProfileMenuItem(icon: Icons.notifications, title: 'Notifications', onTap: () => Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(builder: (context) => const NotificationsScreen()))),
           _buildProfileMenuItem(icon: Icons.logout, title: 'Logout', color: AppColors.dangerRed, onTap: _confirmLogout),
         ],
       ),

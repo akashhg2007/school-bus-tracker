@@ -23,17 +23,17 @@ class _BusTrackingScreenState extends State<BusTrackingScreen> {
   final MapController _mapController = MapController();
   final SocketService _socketService = SocketService();
   final LatLng _defaultLocation = const LatLng(12.9716, 77.5946);
-  LatLng? _busLocation;
+  final ValueNotifier<LatLng?> _busLocationNotifier = ValueNotifier(null);
   LatLng? _userLocation;
-  bool _followGps = true;
+  final ValueNotifier<bool> _followGpsNotifier = ValueNotifier(true);
   List<Map<String, dynamic>> _stops = [];
   String? _driverName;
-  String? _nextStopName;
-  int? _nextStopEta;
-  double? _nextStopDistance;
-  double? _busHeading;
+  final ValueNotifier<String?> _nextStopName = ValueNotifier(null);
+  final ValueNotifier<int?> _nextStopEta = ValueNotifier(null);
+  final ValueNotifier<double?> _nextStopDistance = ValueNotifier(null);
+  final ValueNotifier<double?> _busHeading = ValueNotifier(null);
   bool _loading = true;
-  bool _isRealTimeActive = false;
+  final ValueNotifier<bool> _isRealTimeActive = ValueNotifier(false);
   StreamSubscription? _locationSubscription;
   StreamSubscription? _approachingSubscription;
   String? _lastAlertKey;
@@ -49,8 +49,8 @@ class _BusTrackingScreenState extends State<BusTrackingScreen> {
   Future<void> _getUserLocation() async {
     final location = await LocationService().getCurrentLatLng();
     if (location != null && mounted) {
-      setState(() => _userLocation = location);
-      if (_busLocation == null) {
+      _userLocation = location;
+      if (_busLocationNotifier.value == null) {
         _moveCamera(location, 15);
       }
     }
@@ -63,9 +63,9 @@ class _BusTrackingScreenState extends State<BusTrackingScreen> {
   }
 
   void _recenter() {
-    final target = _busLocation ?? _userLocation;
+    final target = _busLocationNotifier.value ?? _userLocation;
     if (target == null) return;
-    setState(() => _followGps = true);
+    _followGpsNotifier.value = true;
     _moveCamera(target, 16);
   }
 
@@ -73,6 +73,13 @@ class _BusTrackingScreenState extends State<BusTrackingScreen> {
   void dispose() {
     _locationSubscription?.cancel();
     _approachingSubscription?.cancel();
+    _busLocationNotifier.dispose();
+    _followGpsNotifier.dispose();
+    _isRealTimeActive.dispose();
+    _busHeading.dispose();
+    _nextStopName.dispose();
+    _nextStopEta.dispose();
+    _nextStopDistance.dispose();
     if (widget.busId != null) {
       _socketService.leaveBusRoom(widget.busId!);
     }
@@ -91,21 +98,20 @@ class _BusTrackingScreenState extends State<BusTrackingScreen> {
         final lng = data['longitude'];
         if (lat != null && lng != null) {
           final nextStop = data['nextStop'];
-          setState(() {
-            _busLocation = LatLng(lat.toDouble(), lng.toDouble());
-            _isRealTimeActive = true;
-            _busHeading = data['heading']?.toDouble();
-            if (nextStop != null) {
-              _nextStopName = nextStop['name'];
-              _nextStopEta = nextStop['eta']?.round();
-              _nextStopDistance = nextStop['distance']?.toDouble();
-            } else {
-              _nextStopName = null;
-              _nextStopEta = null;
-              _nextStopDistance = null;
-            }
-          });
-          if (_followGps) _moveCamera(LatLng(lat.toDouble(), lng.toDouble()), 15);
+          final pos = LatLng(lat.toDouble(), lng.toDouble());
+          _busLocationNotifier.value = pos;
+          _isRealTimeActive.value = true;
+          _busHeading.value = data['heading']?.toDouble();
+          if (nextStop != null) {
+            _nextStopName.value = nextStop['name'];
+            _nextStopEta.value = nextStop['eta']?.round();
+            _nextStopDistance.value = nextStop['distance']?.toDouble();
+          } else {
+            _nextStopName.value = null;
+            _nextStopEta.value = null;
+            _nextStopDistance.value = null;
+          }
+          if (_followGpsNotifier.value) _moveCamera(pos, 15);
         }
       }
     });
@@ -146,9 +152,7 @@ class _BusTrackingScreenState extends State<BusTrackingScreen> {
         final locResponse = await api.getBusLiveLocation(widget.busId!);
         if (locResponse.statusCode == 200 && locResponse.data['data'] != null) {
           final loc = locResponse.data['data'];
-          setState(() {
-            _busLocation = LatLng(loc['latitude'], loc['longitude']);
-          });
+          _busLocationNotifier.value = LatLng(loc['latitude'], loc['longitude']);
         }
       } catch (_) {}
 
@@ -169,30 +173,32 @@ class _BusTrackingScreenState extends State<BusTrackingScreen> {
       appBar: AppBar(
         title: Text('Track ${widget.busNumber ?? 'Bus'}'),
         actions: [
-          if (_isRealTimeActive)
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: Center(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: AppColors.safeGreen,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.wifi, color: AppColors.white, size: 14),
-                      SizedBox(width: 4),
-                      Text(
-                        'Live',
-                        style: TextStyle(color: AppColors.white, fontSize: 10),
-                      ),
-                    ],
+          ValueListenableBuilder<bool>(
+            valueListenable: _isRealTimeActive,
+            builder: (context, isActive, _) {
+              if (!isActive) return const SizedBox.shrink();
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppColors.safeGreen,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.wifi, color: AppColors.white, size: 14),
+                        SizedBox(width: 4),
+                        Text('Live', style: TextStyle(color: AppColors.white, fontSize: 10)),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            ),
+              );
+            },
+          ),
         ],
       ),
       body: _loading
@@ -201,10 +207,32 @@ class _BusTrackingScreenState extends State<BusTrackingScreen> {
               children: [
                 Expanded(
                   flex: 3,
-                  child: Stack(
-                    children: [
-                      OsmMapWidget(
-                        center: _busLocation ?? _userLocation ?? _defaultLocation,
+                  child: _buildMapSection(),
+                ),
+                Expanded(
+                  flex: 2,
+                  child: _buildInfoSection(),
+                ),
+              ],
+            ),
+    );
+  }
+
+  Widget _buildMapSection() {
+    return ValueListenableBuilder<LatLng?>(
+      valueListenable: _busLocationNotifier,
+      builder: (context, busLocation, _) {
+        return ValueListenableBuilder<bool>(
+          valueListenable: _followGpsNotifier,
+          builder: (context, followGps, _) {
+            return ValueListenableBuilder<double?>(
+              valueListenable: _busHeading,
+              builder: (context, heading, _) {
+                return Stack(
+                  children: [
+                    RepaintBoundary(
+                      child: OsmMapWidget(
+                        center: busLocation ?? _userLocation ?? _defaultLocation,
                         zoom: AppConfig.mapFollowZoom,
                         controller: _mapController,
                         myLocation: _userLocation,
@@ -214,7 +242,9 @@ class _BusTrackingScreenState extends State<BusTrackingScreen> {
                               event.source == MapEventSource.onMultiFinger ||
                               event.source == MapEventSource.multiFingerGestureStart ||
                               event.source == MapEventSource.flingAnimationController) {
-                            if (_followGps && mounted) setState(() => _followGps = false);
+                            if (_followGpsNotifier.value && mounted) {
+                              _followGpsNotifier.value = false;
+                            }
                           }
                         },
                         polylines: [
@@ -228,12 +258,12 @@ class _BusTrackingScreenState extends State<BusTrackingScreen> {
                                   ),
                               ],
                               strokeWidth: 4,
-                              color: AppColors.skyBlue.withOpacity(0.7),
+                              color: AppColors.skyBlue.withValues(alpha: 0.7),
                             ),
                         ],
                         markers: [
-                          if (_busLocation != null)
-                            buildBusMarker(_busLocation!, _busHeading ?? 0, widget.busNumber ?? 'BUS', true),
+                          if (busLocation != null)
+                            buildBusMarker(busLocation, heading ?? 0, widget.busNumber ?? 'BUS', true),
                           if (_userLocation != null)
                             buildParentMarker(_userLocation!, 'You'),
                           for (final stop in _stops)
@@ -248,134 +278,176 @@ class _BusTrackingScreenState extends State<BusTrackingScreen> {
                               ),
                         ],
                       ),
-                      Positioned(
-                        right: 12,
-                        top: 12,
-                        child: FloatingActionButton.small(
-                          heroTag: 'locate_bus',
-                          backgroundColor: AppColors.skyBlue,
-                          onPressed: _recenter,
-                          child: const Icon(Icons.my_location, color: AppColors.white),
-                        ),
-                      ),
-                      Positioned(
-                        bottom: 16,
-                        left: 16,
-                        right: 16,
-                        child: Card(
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: _busLocation != null
-                                        ? AppColors.safeGreen.withOpacity(0.1)
-                                        : AppColors.medium.withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Icon(
-                                    _busLocation != null ? Icons.directions_bus : Icons.offline_bolt,
-                                    color: _busLocation != null ? AppColors.safeGreen : AppColors.medium,
-                                    size: 30,
-                                  ),
-                                ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text(
-                                        _busLocation != null ? 'Bus is active' : 'Bus not active',
-                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                                      ),
-                                      if (_nextStopName != null && _nextStopEta != null) ...[
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          'Next stop: $_nextStopName â€” ${_nextStopEta} min${_nextStopDistance != null ? ' Â· ${_nextStopDistance!.toStringAsFixed(1)} km' : ''}',
-                                          style: const TextStyle(color: AppColors.alertOrange, fontSize: 12),
-                                        ),
-                                      ],
-                                      Text(
-                                        _driverName != null ? 'Driver: $_driverName' : 'No driver assigned',
-                                        style: const TextStyle(color: AppColors.medium, fontSize: 12),
-                                      ),
-                                      if (_isRealTimeActive)
-                                        const Text(
-                                          'Real-time tracking active',
-                                          style: TextStyle(color: AppColors.safeGreen, fontSize: 10),
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  flex: 2,
-                  child: RefreshIndicator(
-                    onRefresh: _loadBusData,
-                    child: SingleChildScrollView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Card(
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 12,
-                                  height: 12,
-                                  decoration: BoxDecoration(
-                                    color: _busLocation != null ? AppColors.safeGreen : AppColors.medium,
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Text(
-                                  _busLocation != null ? 'Bus is on the way' : 'Waiting for GPS data',
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        if (_driverName != null) ...[
-                          const SizedBox(height: 12),
-                          Card(
-                            child: ListTile(
-                              leading: const CircleAvatar(
-                                backgroundColor: AppColors.skyBlue,
-                                child: Icon(Icons.person, color: AppColors.white),
-                              ),
-                              title: Text(_driverName!),
-                              subtitle: const Text('Driver'),
-                            ),
-                          ),
-                        ],
-                        if (_stops.isNotEmpty) ...[
-                          const SizedBox(height: 16),
-                          const Text('Stops', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                          const SizedBox(height: 8),
-                          ..._stops.map((stop) => _buildStopItem(stop['name'] ?? '', stop['order'])),
-                        ],
-                      ],
                     ),
+                    Positioned(
+                      right: 12,
+                      top: 12,
+                      child: FloatingActionButton.small(
+                        heroTag: 'locate_bus',
+                        backgroundColor: AppColors.skyBlue,
+                        onPressed: _recenter,
+                        child: const Icon(Icons.my_location, color: AppColors.white),
+                      ),
+                    ),
+                    _buildInfoCard(busLocation),
+                  ],
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildInfoCard(LatLng? busLocation) {
+    return Positioned(
+      bottom: 16,
+      left: 16,
+      right: 16,
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: busLocation != null
+                      ? AppColors.safeGreen.withValues(alpha: 0.1)
+                      : AppColors.medium.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  busLocation != null ? Icons.directions_bus : Icons.offline_bolt,
+                  color: busLocation != null ? AppColors.safeGreen : AppColors.medium,
+                  size: 30,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      busLocation != null ? 'Bus is active' : 'Bus not active',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    ),
+                    ValueListenableBuilder<String?>(
+                      valueListenable: _nextStopName,
+                      builder: (context, nextStopName, _) {
+                        if (nextStopName == null) return const SizedBox.shrink();
+                        return ValueListenableBuilder<int?>(
+                          valueListenable: _nextStopEta,
+                          builder: (context, eta, _) {
+                            if (eta == null) return const SizedBox.shrink();
+                            return ValueListenableBuilder<double?>(
+                              valueListenable: _nextStopDistance,
+                              builder: (context, dist, _) {
+                                return Text(
+                                  'Next stop: $nextStopName \u2014 $eta min${dist != null ? ' \u00b7 ${dist.toStringAsFixed(1)} km' : ''}',
+                                  style: const TextStyle(color: AppColors.alertOrange, fontSize: 12),
+                                );
+                              },
+                            );
+                          },
+                        );
+                      },
+                    ),
+                    Text(
+                      _driverName != null ? 'Driver: $_driverName' : 'No driver assigned',
+                      style: const TextStyle(color: AppColors.medium, fontSize: 12),
+                    ),
+                    ValueListenableBuilder<bool>(
+                      valueListenable: _isRealTimeActive,
+                      builder: (context, isActive, _) {
+                        if (!isActive) return const SizedBox.shrink();
+                        return const Text(
+                          'Real-time tracking active',
+                          style: TextStyle(color: AppColors.safeGreen, fontSize: 10),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoSection() {
+    return RefreshIndicator(
+      onRefresh: _loadBusData,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  ValueListenableBuilder<LatLng?>(
+                    valueListenable: _busLocationNotifier,
+                    builder: (context, busLocation, _) {
+                      return Container(
+                        width: 12,
+                        height: 12,
+                        decoration: BoxDecoration(
+                          color: busLocation != null ? AppColors.safeGreen : AppColors.medium,
+                          shape: BoxShape.circle,
+                        ),
+                      );
+                    },
                   ),
-                ),
-                ),
-              ],
+                  const SizedBox(width: 12),
+                  ValueListenableBuilder<LatLng?>(
+                    valueListenable: _busLocationNotifier,
+                    builder: (context, busLocation, _) {
+                      return Text(
+                        busLocation != null ? 'Bus is on the way' : 'Waiting for GPS data',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      );
+                    },
+                  ),
+                ],
+              ),
             ),
+          ),
+          if (_driverName != null) ...[
+            const SizedBox(height: 12),
+            Card(
+              child: ListTile(
+                leading: const CircleAvatar(
+                  backgroundColor: AppColors.skyBlue,
+                  child: Icon(Icons.person, color: AppColors.white),
+                ),
+                title: Text(_driverName!),
+                subtitle: const Text('Driver'),
+              ),
+            ),
+          ],
+          if (_stops.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            const Text('Stops', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: _stops.length * 72.0,
+              child: ListView.builder(
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: _stops.length,
+                itemBuilder: (context, index) {
+                  final stop = _stops[index];
+                  return _buildStopItem(stop['name'] ?? '', stop['order']);
+                },
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 

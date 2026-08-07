@@ -6,7 +6,7 @@ import path from 'path';
 import { initializeFirebase } from './config/firebase';
 import { initializeSocket } from './socket';
 import { AppError } from './utils/errors';
-import { securityHeaders, generalLimiter, authLimiter, otpLimiter, corsOptions, requestId } from './middleware/security';
+import { securityHeaders, generalLimiter, authLimiter, otpLimiter, corsOptions, requestId, cacheHeaders } from './middleware/security';
 import prisma from './config/database';
 
 // Import routes
@@ -38,6 +38,7 @@ app.set('trust proxy', process.env.TRUST_PROXY || 1);
 app.use(requestId);
 app.use(securityHeaders);
 app.use(corsOptions);
+app.use(cacheHeaders);
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
@@ -47,8 +48,16 @@ app.use('/api/auth/send-otp', otpLimiter);
 app.use('/api', generalLimiter);
 
 // Health check endpoint
-app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+app.get('/health', async (_req, res) => {
+  const checks: Record<string, string> = { status: 'ok', timestamp: new Date().toISOString() };
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    checks.database = 'connected';
+  } catch (e) {
+    checks.database = 'disconnected';
+    checks.status = 'degraded';
+  }
+  res.json(checks);
 });
 
 // API Routes

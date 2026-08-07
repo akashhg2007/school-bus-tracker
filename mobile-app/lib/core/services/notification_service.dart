@@ -25,15 +25,15 @@ class NotificationService {
 
     final socket = SocketService();
     _sub = socket.notificationStream.listen((data) {
-      AppNotification notification;
+      final Map<String, dynamic> json;
       try {
-        if (data is Map<String, dynamic>) {
-          notification = AppNotification.fromJson(data);
-        } else if (data is Map) {
-          notification = AppNotification.fromJson(Map<String, dynamic>.from(data));
-        } else {
-          return;
-        }
+        json = Map<String, dynamic>.from(data);
+      } catch (_) {
+        return;
+      }
+      final AppNotification notification;
+      try {
+        notification = AppNotification.fromJson(json);
       } catch (_) {
         return;
       }

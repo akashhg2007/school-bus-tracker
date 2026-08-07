@@ -57,7 +57,7 @@ export const getTripHistory = async (req: Request, res: Response, next: NextFunc
 export const getTripById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { id } = req.params;
-    const trip = await tripService.getTripById(id);
+    const trip = await tripService.getTripById(id, req.user?.schoolId);
     sendSuccess(res, 'Trip retrieved successfully', trip);
   } catch (error) {
     next(error);

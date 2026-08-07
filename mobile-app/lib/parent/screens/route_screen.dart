@@ -33,6 +33,12 @@ class _RouteViewState extends State<RouteView> {
     _getUserLocation();
   }
 
+  @override
+  void dispose() {
+    _mapController.dispose();
+    super.dispose();
+  }
+
   Future<void> _getUserLocation() async {
     try {
       final location = await LocationService().getCurrentLatLng();
@@ -91,103 +97,126 @@ class _RouteViewState extends State<RouteView> {
   Widget build(BuildContext context) {
     return _loading
         ? const Center(child: CircularProgressIndicator())
-        : SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Card(
-                  clipBehavior: Clip.antiAlias,
-                  child: SizedBox(
-                    height: 240,
-                    child: OsmMapWidget(
-                      center: _stops.isNotEmpty
-                          ? LatLng(
-                              (_stops.first['latitude'] as num).toDouble(),
-                              (_stops.first['longitude'] as num).toDouble(),
-                            )
-                          : _defaultLocation,
-                      zoom: 13.0,
-                      controller: _mapController,
-                      polylines: [
-                        if (_stops.length > 1)
-                          Polyline(
-                            points: [
-                              for (final stop in _stops)
-                                LatLng(
-                                  (stop['latitude'] as num).toDouble(),
-                                  (stop['longitude'] as num).toDouble(),
+        : CustomScrollView(
+            slivers: [
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Card(
+                        clipBehavior: Clip.antiAlias,
+                        child: SizedBox(
+                          height: 240,
+                          child: OsmMapWidget(
+                            center: _stops.isNotEmpty
+                                ? LatLng(
+                                    (_stops.first['latitude'] as num).toDouble(),
+                                    (_stops.first['longitude'] as num).toDouble(),
+                                  )
+                                : _defaultLocation,
+                            zoom: 13.0,
+                            controller: _mapController,
+                            polylines: [
+                              if (_stops.length > 1)
+                                Polyline(
+                                  points: [
+                                    for (final stop in _stops)
+                                      LatLng(
+                                        (stop['latitude'] as num).toDouble(),
+                                        (stop['longitude'] as num).toDouble(),
+                                      ),
+                                  ],
+                                  strokeWidth: 4,
+                                  color: AppColors.skyBlue.withValues(alpha: 0.7),
                                 ),
                             ],
-                            strokeWidth: 4,
-                            color: AppColors.skyBlue.withOpacity(0.7),
-                          ),
-                      ],
-                      markers: [
-                        if (_userLocation != null)
-                          buildParentMarker(_userLocation!, 'You'),
-                        for (final stop in _stops)
-                          if (stop['latitude'] != null && stop['longitude'] != null)
-                            buildStopMarker(
-                              LatLng(
-                                (stop['latitude'] as num).toDouble(),
-                                (stop['longitude'] as num).toDouble(),
-                              ),
-                              stop['name'] ?? '',
-                              false,
-                            ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                if (_driverName != null)
-                  Card(
-                    child: ListTile(
-                      leading: const CircleAvatar(
-                        backgroundColor: AppColors.skyBlue,
-                        child: Icon(Icons.person, color: AppColors.white),
-                      ),
-                      title: Text(_driverName!),
-                      subtitle: Text(_driverPhone != null ? 'Driver \u2022 $_driverPhone' : 'Driver'),
-                      trailing: _driverPhone != null
-                          ? IconButton(
-                              icon: const Icon(Icons.call, color: AppColors.safeGreen),
-                              onPressed: _callDriver,
-                            )
-                          : null,
-                    ),
-                  ),
-                const SizedBox(height: 16),
-                const Text('Route Stops', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                if (_stops.isEmpty)
-                  const Card(child: Padding(padding: EdgeInsets.all(16), child: Center(child: Text('No stops on this route')))),
-                ..._stops.map((stop) => Card(
-                      child: ListTile(
-                        leading: Container(
-                          width: 24,
-                          height: 24,
-                          decoration: const BoxDecoration(
-                            color: AppColors.medium,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Center(
-                            child: Text(
-                              '${stop['order']}',
-                              style: const TextStyle(
-                                color: AppColors.white,
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
+                            markers: [
+                              if (_userLocation != null)
+                                buildParentMarker(_userLocation!, 'You'),
+                              for (final stop in _stops)
+                                if (stop['latitude'] != null && stop['longitude'] != null)
+                                  buildStopMarker(
+                                    LatLng(
+                                      (stop['latitude'] as num).toDouble(),
+                                      (stop['longitude'] as num).toDouble(),
+                                    ),
+                                    stop['name'] ?? '',
+                                    false,
+                                  ),
+                            ],
                           ),
                         ),
-                        title: Text(stop['name'] ?? ''),
                       ),
-                    )),
-              ],
-            ),
+                      const SizedBox(height: 16),
+                      if (_driverName != null)
+                        Card(
+                          child: ListTile(
+                            leading: const CircleAvatar(
+                              backgroundColor: AppColors.skyBlue,
+                              child: Icon(Icons.person, color: AppColors.white),
+                            ),
+                            title: Text(_driverName!),
+                            subtitle: Text(_driverPhone != null ? 'Driver \u2022 $_driverPhone' : 'Driver'),
+                            trailing: _driverPhone != null
+                                ? IconButton(
+                                    icon: const Icon(Icons.call, color: AppColors.safeGreen),
+                                    onPressed: _callDriver,
+                                  )
+                                : null,
+                          ),
+                        ),
+                      const SizedBox(height: 16),
+                      const Text('Route Stops', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                    ],
+                  ),
+                ),
+              ),
+              if (_stops.isEmpty)
+                const SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 16),
+                    child: Card(child: Padding(padding: EdgeInsets.all(16), child: Center(child: Text('No stops on this route')))),
+                  ),
+                )
+              else
+                SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      final stop = _stops[index];
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                        child: Card(
+                          child: ListTile(
+                            leading: Container(
+                              width: 24,
+                              height: 24,
+                              decoration: const BoxDecoration(
+                                color: AppColors.medium,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Center(
+                                child: Text(
+                                  '${stop['order']}',
+                                  style: const TextStyle(
+                                    color: AppColors.white,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            title: Text(stop['name'] ?? ''),
+                          ),
+                        ),
+                      );
+                    },
+                    childCount: _stops.length,
+                  ),
+                ),
+            ],
           );
   }
 }

@@ -14,6 +14,9 @@ class NotificationsScreen extends StatefulWidget {
 class _NotificationsScreenState extends State<NotificationsScreen> {
   List<Map<String, dynamic>> _notifications = [];
   bool _loading = true;
+  bool _hasMore = true;
+  int _currentPage = 1;
+  final int _pageSize = 20;
   StreamSubscription? _notificationSubscription;
 
   @override
@@ -37,11 +40,17 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   Future<void> _loadNotifications() async {
     try {
       final api = ApiService();
-      final response = await api.getNotifications();
+      final response = await api.getNotifications(page: _currentPage, limit: _pageSize);
       if (response.statusCode == 200) {
         final data = response.data['data'];
+        final newItems = List<Map<String, dynamic>>.from(data is Map ? data['notifications'] ?? [] : data ?? []);
         setState(() {
-          _notifications = List<Map<String, dynamic>>.from(data is Map ? data['notifications'] ?? [] : data ?? []);
+          if (_currentPage == 1) {
+            _notifications = newItems;
+          } else {
+            _notifications.addAll(newItems);
+          }
+          _hasMore = newItems.length >= _pageSize;
           _loading = false;
         });
       }
@@ -55,6 +64,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
   }
 
+  void _loadMore() {
+    if (!_hasMore || _loading) return;
+    _currentPage++;
+    _loadNotifications();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -63,26 +78,41 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           ? const Center(child: CircularProgressIndicator())
           : _notifications.isEmpty
               ? const Center(child: Text('No notifications'))
-              : ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: _notifications.length,
-                  itemBuilder: (context, index) {
-                    final n = _notifications[index];
-                    final isRead = n['isRead'] == 1;
-                    return Card(
-                      color: !isRead ? AppColors.skyBlue.withOpacity(0.05) : null,
-                      child: ListTile(
-                        leading: Container(
-                          width: 40, height: 40,
-                          decoration: BoxDecoration(color: AppColors.skyBlue.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-                          child: const Icon(Icons.notifications, color: AppColors.skyBlue),
-                        ),
-                        title: Text(n['title'] ?? '', style: TextStyle(fontWeight: !isRead ? FontWeight.bold : FontWeight.normal)),
-                        subtitle: Text(n['body'] ?? '', maxLines: 2, overflow: TextOverflow.ellipsis),
-                        trailing: Text(_formatTime(n['createdAt']), style: const TextStyle(color: AppColors.medium, fontSize: 12)),
-                      ),
-                    );
+              : NotificationListener<ScrollNotification>(
+                  onNotification: (notification) {
+                    if (notification is ScrollEndNotification &&
+                        notification.metrics.pixels >= notification.metrics.maxScrollExtent - 100) {
+                      _loadMore();
+                    }
+                    return false;
                   },
+                  child: ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: _notifications.length + (_hasMore ? 1 : 0),
+                    itemBuilder: (context, index) {
+                      if (index == _notifications.length) {
+                        return const Padding(
+                          padding: EdgeInsets.all(16),
+                          child: Center(child: CircularProgressIndicator()),
+                        );
+                      }
+                      final n = _notifications[index];
+                      final isRead = n['isRead'] == 1;
+                      return Card(
+                        color: !isRead ? AppColors.skyBlue.withValues(alpha: 0.05) : null,
+                        child: ListTile(
+                          leading: Container(
+                            width: 40, height: 40,
+                            decoration: BoxDecoration(color: AppColors.skyBlue.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+                            child: const Icon(Icons.notifications, color: AppColors.skyBlue),
+                          ),
+                          title: Text(n['title'] ?? '', style: TextStyle(fontWeight: !isRead ? FontWeight.bold : FontWeight.normal)),
+                          subtitle: Text(n['body'] ?? '', maxLines: 2, overflow: TextOverflow.ellipsis),
+                          trailing: Text(_formatTime(n['createdAt']), style: const TextStyle(color: AppColors.medium, fontSize: 12)),
+                        ),
+                      );
+                    },
+                  ),
                 ),
     );
   }

@@ -14,7 +14,9 @@ interface LocationUpdate {
 
 const MIN_DEDUPE_DISTANCE_M = 10;
 const MAX_DEDUPE_INTERVAL_S = 30;
+const TRIP_CACHE_TTL_MS = 60 * 1000;
 const lastSaved = new Map<string, { lat: number; lng: number; at: number }>();
+const tripCache = new Map<string, { data: any; expiresAt: number }>();
 
 const isValidLatitude = (lat: number): boolean => lat >= -90 && lat <= 90;
 const isValidLongitude = (lng: number): boolean => lng >= -180 && lng <= 180;
@@ -28,37 +30,49 @@ export const updateLocation = async (tripId: string, location: LocationUpdate) =
     throw new BadRequestError('Invalid speed value');
   }
 
-  const trip = await prisma.trip.findUnique({
-    where: { id: tripId },
-    include: {
-      bus: {
-        include: {
-          school: true,
-          route: {
-            include: {
-              stops: {
-                orderBy: { order: 'asc' },
+  const now = Date.now();
+  let trip = tripCache.get(tripId)?.data;
+  if (!trip || tripCache.get(tripId)!.expiresAt < now) {
+    trip = await prisma.trip.findUnique({
+      where: { id: tripId },
+      include: {
+        bus: {
+          include: {
+            school: true,
+            route: {
+              include: {
+                stops: {
+                  orderBy: { order: 'asc' },
+                },
               },
             },
           },
         },
+        driver: true,
       },
-      driver: true,
-    },
-  });
+    });
+    if (trip) {
+      tripCache.set(tripId, { data: trip, expiresAt: now + TRIP_CACHE_TTL_MS });
+    }
+    if (tripCache.size > 1000) {
+      for (const [key, val] of tripCache) {
+        if (val.expiresAt < now) tripCache.delete(key);
+      }
+    }
+  }
 
   if (!trip) {
     throw new NotFoundError('Trip not found');
   }
 
-  const now = Date.now();
+  const dedupeNow = Date.now();
   const last = lastSaved.get(tripId);
   if (last) {
     const distanceM = calculateDistance(
       { latitude: last.lat, longitude: last.lng },
       { latitude: location.latitude, longitude: location.longitude }
     ) * 1000;
-    const ageS = (now - last.at) / 1000;
+    const ageS = (dedupeNow - last.at) / 1000;
     if (distanceM < MIN_DEDUPE_DISTANCE_M && ageS < MAX_DEDUPE_INTERVAL_S) {
       if (lastSaved.size > 5000) lastSaved.clear();
       return null;
@@ -67,7 +81,7 @@ export const updateLocation = async (tripId: string, location: LocationUpdate) =
   lastSaved.set(tripId, {
     lat: location.latitude,
     lng: location.longitude,
-    at: now,
+    at: dedupeNow,
   });
 
   const gpsLocation = await prisma.gpsLocation.create({
@@ -91,11 +105,11 @@ export const updateLocation = async (tripId: string, location: LocationUpdate) =
 
     const nearestStop = findNearestStop(
       currentLocation,
-      stops.map((s) => ({ id: s.id, latitude: s.latitude, longitude: s.longitude }))
+      stops.map((s: any) => ({ id: s.id, latitude: s.latitude, longitude: s.longitude }))
     );
 
     if (nearestStop) {
-      const stopIndex = stops.findIndex((s) => s.id === nearestStop.id);
+      const stopIndex = stops.findIndex((s: any) => s.id === nearestStop.id);
       const nextStopIndex = stopIndex + 1 < stops.length ? stopIndex + 1 : stopIndex;
       nextStop = stops[nextStopIndex];
 
@@ -143,12 +157,25 @@ export const updateLocation = async (tripId: string, location: LocationUpdate) =
         busId: trip.busId,
         stopId: nextStop.id,
       },
-      include: {
-        parent: {
-          select: { id: true, fcmToken: true },
-        },
-      },
+      select: { id: true, name: true, parentId: true },
     });
+
+    const parentIds = [...new Set(studentsOnBus.map((s) => s.parentId))];
+    const recentNotifications = await prisma.notification.findMany({
+      where: {
+        userId: { in: parentIds },
+        userType: 'PARENT',
+        data: { contains: `"event":"approaching-stop"` },
+        createdAt: { gte: new Date(Date.now() - 10 * 60 * 1000) },
+      },
+      select: { userId: true, data: true },
+    });
+
+    const alreadyNotified = new Set(
+      recentNotifications
+        .filter((n) => n.data?.includes(`"stopId":"${nextStop.id}"`))
+        .map((n) => n.userId)
+    );
 
     for (const student of studentsOnBus) {
       emitToRoom(`parent:${student.parentId}`, 'bus:approaching-stop', {
@@ -158,21 +185,12 @@ export const updateLocation = async (tripId: string, location: LocationUpdate) =
         eta: etaMinutes,
         busNumber: trip.bus.busNumber,
       });
+    }
 
-      try {
-        const recent = await prisma.notification.findFirst({
-          where: {
-            userId: student.parentId,
-            userType: 'PARENT',
-            data: {
-              contains: `"event":"approaching-stop"`,
-            },
-            createdAt: { gte: new Date(Date.now() - 10 * 60 * 1000) },
-          },
-          orderBy: { createdAt: 'desc' },
-        });
-        if (recent && recent.data && recent.data.includes(`"stopId":"${nextStop.id}"`)) continue;
-        await sendNotification({
+    const studentsToNotify = studentsOnBus.filter((s) => !alreadyNotified.has(s.parentId));
+    await Promise.allSettled(
+      studentsToNotify.map((student) =>
+        sendNotification({
           userId: student.parentId,
           userType: 'PARENT',
           title: 'Bus approaching stop',
@@ -184,11 +202,9 @@ export const updateLocation = async (tripId: string, location: LocationUpdate) =
             eta: etaMinutes,
             busNumber: trip.bus.busNumber,
           },
-        });
-      } catch (error) {
-        console.error('Failed to notify parent about approaching stop:', error);
-      }
-    }
+        })
+      )
+    );
   }
 
   return gpsLocation;

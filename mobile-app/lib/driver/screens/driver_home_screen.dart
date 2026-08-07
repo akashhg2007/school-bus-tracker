@@ -52,10 +52,12 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
-              AuthService().logout();
-              Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => LoginScreen()));
+              await AuthService().logout();
+              if (mounted) {
+                Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => LoginScreen()));
+              }
             },
             child: const Text('Logout', style: TextStyle(color: AppColors.dangerRed)),
           ),
@@ -66,7 +68,6 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final auth = AuthService();
     return Scaffold(
       appBar: AppBar(
         title: const Text('Driver Dashboard'),
@@ -116,7 +117,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
           const SizedBox(height: 16),
           if (bus != null)
             Card(
-              color: AppColors.safeGreen.withOpacity(0.1),
+              color: AppColors.safeGreen.withValues(alpha: 0.1),
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Row(children: [

@@ -35,7 +35,7 @@ export const getRoutes = async (req: Request, res: Response, next: NextFunction)
 export const getRouteById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { id } = req.params;
-    const route = await routeService.getRouteById(id);
+    const route = await routeService.getRouteById(id, req.user?.schoolId);
     sendSuccess(res, 'Route retrieved successfully', route);
   } catch (error) {
     next(error);

@@ -20,12 +20,13 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
   String? _error;
-  bool _obscurePassword = true;
+  final ValueNotifier<bool> _obscurePassword = ValueNotifier(true);
 
   @override
   void dispose() {
     _identifierController.dispose();
     _passwordController.dispose();
+    _obscurePassword.dispose();
     super.dispose();
   }
 
@@ -138,22 +139,27 @@ class _LoginScreenState extends State<LoginScreen> {
                     },
                   ),
                   const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _passwordController,
-                    obscureText: _obscurePassword,
-                    decoration: InputDecoration(
-                      labelText: 'Password',
-                      prefixIcon: const Icon(Icons.lock),
-                      hintText: 'Enter your password',
-                      suffixIcon: IconButton(
-                        icon: Icon(_obscurePassword ? Icons.visibility : Icons.visibility_off),
-                        onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                      ),
-                    ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) return 'Please enter your password';
-                      if (value.length < 6) return 'Password must be at least 6 characters';
-                      return null;
+                  ValueListenableBuilder<bool>(
+                    valueListenable: _obscurePassword,
+                    builder: (context, obscure, _) {
+                      return TextFormField(
+                        controller: _passwordController,
+                        obscureText: obscure,
+                        decoration: InputDecoration(
+                          labelText: 'Password',
+                          prefixIcon: const Icon(Icons.lock),
+                          hintText: 'Enter your password',
+                          suffixIcon: IconButton(
+                            icon: Icon(obscure ? Icons.visibility : Icons.visibility_off),
+                            onPressed: () => _obscurePassword.value = !_obscurePassword.value,
+                          ),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.isEmpty) return 'Please enter your password';
+                          if (value.length < 6) return 'Password must be at least 6 characters';
+                          return null;
+                        },
+                      );
                     },
                   ),
                   const SizedBox(height: 24),

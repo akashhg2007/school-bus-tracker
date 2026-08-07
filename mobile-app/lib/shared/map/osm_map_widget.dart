@@ -47,8 +47,8 @@ class OsmMapWidget extends StatelessWidget {
               point: myLocation!,
               radius: myLocationAccuracy!,
               useRadiusInMeter: true,
-              color: AppColors.skyBlue.withOpacity(0.15),
-              borderColor: AppColors.skyBlue.withOpacity(0.4),
+              color: AppColors.skyBlue.withValues(alpha: 0.15),
+              borderColor: AppColors.skyBlue.withValues(alpha: 0.4),
               borderStrokeWidth: 1.5,
             ),
           ]
@@ -72,6 +72,7 @@ class OsmMapWidget extends StatelessWidget {
         TileLayer(
           urlTemplate: AppConfig.mapTileUrl,
           userAgentPackageName: 'com.schoolbustracker.app',
+          tileProvider: NetworkTileProvider(),
         ),
         PolylineLayer(
           polylines: polylines,
@@ -108,7 +109,7 @@ Marker buildBusMarker(LatLng position, double? heading, String busNumber, bool i
           shape: BoxShape.circle,
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.3),
+              color: Colors.black.withValues(alpha: 0.3),
               blurRadius: 4,
               offset: const Offset(0, 2),
             ),
@@ -135,7 +136,7 @@ Marker buildStopMarker(LatLng position, String name, bool isNextStop) {
         shape: BoxShape.circle,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.2),
+            color: Colors.black.withValues(alpha: 0.2),
             blurRadius: 4,
             offset: const Offset(0, 2),
           ),
@@ -161,7 +162,7 @@ Marker buildParentMarker(LatLng position, String studentName) {
         shape: BoxShape.circle,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.2),
+            color: Colors.black.withValues(alpha: 0.2),
             blurRadius: 4,
             offset: const Offset(0, 2),
           ),
@@ -193,7 +194,7 @@ Marker buildMyLocationMarker(LatLng position, double? heading) {
               border: Border.all(color: AppColors.white, width: 3),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.25),
+                  color: Colors.black.withValues(alpha: 0.25),
                   blurRadius: 6,
                   offset: const Offset(0, 2),
                 ),

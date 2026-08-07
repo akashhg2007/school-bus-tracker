@@ -20,7 +20,7 @@ class TripScreen extends StatefulWidget {
   State<TripScreen> createState() => _TripScreenState();
 }
 
-class _TripScreenState extends State<TripScreen> {
+class _TripScreenState extends State<TripScreen> with WidgetsBindingObserver {
   final MapController _mapController = MapController();
   final LocationService _locationService = LocationService();
   final SocketService _socketService = SocketService();
@@ -33,14 +33,15 @@ class _TripScreenState extends State<TripScreen> {
   bool _loading = true;
   LatLng? _currentLocation;
   bool _permissionGranted = false;
-  bool _followGps = true;
+  final ValueNotifier<bool> _followGpsNotifier = ValueNotifier(true);
   bool _batterySaverMode = false;
   StreamSubscription? _gpsSubscription;
-  Map<String, dynamic>? _gpsStatus;
+  final ValueNotifier<Map<String, dynamic>?> _gpsStatusNotifier = ValueNotifier(null);
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadStudents();
     _connectSocket();
     _requestLocationPermission();
@@ -49,11 +50,24 @@ class _TripScreenState extends State<TripScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _gpsSubscription?.cancel();
+    _followGpsNotifier.dispose();
+    _gpsStatusNotifier.dispose();
+    _mapController.dispose();
     if (_isTripActive) {
       _locationService.stopTracking();
     }
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      _locationService.setHighAccuracy(false);
+    } else if (state == AppLifecycleState.resumed) {
+      _locationService.setHighAccuracy(true);
+    }
   }
 
   void _listenGps() {
@@ -65,9 +79,9 @@ class _TripScreenState extends State<TripScreen> {
       final pos = LatLng(lat.toDouble(), lng.toDouble());
       setState(() {
         _currentLocation = pos;
-        _gpsStatus = status;
       });
-      if (_followGps) _moveCamera(pos);
+      _gpsStatusNotifier.value = status;
+      if (_followGpsNotifier.value) _moveCamera(pos);
     });
   }
 
@@ -84,7 +98,7 @@ class _TripScreenState extends State<TripScreen> {
       _requestLocationPermission();
       return;
     }
-    setState(() => _followGps = true);
+    _followGpsNotifier.value = true;
     _moveCamera(_currentLocation!);
   }
 
@@ -339,7 +353,7 @@ class _TripScreenState extends State<TripScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('ðŸš¨ SOS alert sent to school! Emergency protocol activated.'),
+            content: Text('SOS alert sent to school! Emergency protocol activated.'),
             backgroundColor: AppColors.dangerRed,
             behavior: SnackBarBehavior.fixed,
             duration: Duration(seconds: 5),
@@ -454,302 +468,315 @@ class _TripScreenState extends State<TripScreen> {
               children: [
                 Expanded(
                   flex: 2,
-                  child: Stack(
-                    children: [
-                      OsmMapWidget(
-                        center: _currentLocation ?? const LatLng(12.9716, 77.5946),
-                        zoom: AppConfig.mapFollowZoom,
-                        controller: _mapController,
-                        myLocation: _currentLocation,
-                        myLocationAccuracy: _gpsStatus?['accuracy']?.toDouble(),
-                        myLocationHeading: _gpsStatus?['heading']?.toDouble(),
-                        onMapEvent: (event) {
-                          if (event.source == MapEventSource.onDrag ||
-                              event.source == MapEventSource.onMultiFinger ||
-                              event.source == MapEventSource.multiFingerGestureStart ||
-                              event.source == MapEventSource.flingAnimationController) {
-                            if (_followGps && mounted) setState(() => _followGps = false);
-                          }
-                        },
-                        markers: [
-                          if (_currentLocation != null)
-                            buildBusMarker(_currentLocation!, _gpsStatus?['heading']?.toDouble() ?? 0,
-                                widget.busNumber ?? 'BUS', true),
-                        ],
-                      ),
-                      if (_isTripActive)
-                        Positioned(
-                          bottom: 16,
-                          left: 16,
-                          child: StreamBuilder<Map<String, dynamic>>(
-                            stream: _locationService.statusStream,
-                            builder: (context, snapshot) {
-                              final status = snapshot.data;
-                              final hasFix = status?['hasFix'] == true;
-                              final fresh = status?['fresh'] == true;
-                              final age = status?['ageSeconds'] ?? -1;
-                              final Color color = !hasFix
-                                  ? AppColors.dangerRed
-                                  : fresh
-                                      ? AppColors.safeGreen
-                                      : AppColors.alertOrange;
-                              final String label = !hasFix
-                                  ? 'Waiting for GPS...'
-                                  : fresh
-                                      ? 'GPS live (age ${age}s)'
-                                      : 'GPS stale (age ${age}s)';
-                              return Card(
-                                child: Padding(
-                                  padding: const EdgeInsets.all(8),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.circle, color: color, size: 12),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        label,
-                                        style: const TextStyle(fontSize: 12),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                      if (_isTripActive)
-                        Positioned(
-                          top: 12,
-                          left: 0,
-                          right: 0,
-                          child: Center(
-                            child: StreamBuilder<Map<String, dynamic>>(
-                              stream: _locationService.statusStream,
-                              builder: (context, snapshot) {
-                                final speed = snapshot.data?['speed']?.toDouble() ?? 0;
-                                final heading = snapshot.data?['heading']?.toDouble() ?? 0;
-                                return Card(
-                                  elevation: 4,
-                                  child: Padding(
-                                    padding:
-                                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(
-                                          Icons.speed,
-                                          color: speed > 0 ? AppColors.safeGreen : AppColors.medium,
-                                          size: 22,
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Text(
-                                          '${(speed).toStringAsFixed(0)} km/h',
-                                          style: const TextStyle(
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 12),
-                                        Icon(
-                                          Icons.navigation,
-                                          color: AppColors.skyBlue,
-                                          size: 18,
-                                        ),
-                                        const SizedBox(width: 4),
-                                        Text('${heading.toStringAsFixed(0)}Â°'),
-                                      ],
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                        ),
-                      if (!_permissionGranted)
-                        Positioned(
-                          top: 8,
-                          left: 8,
-                          right: 8,
-                          child: Card(
-                            color: AppColors.alertOrange.withOpacity(0.9),
-                            child: Padding(
-                              padding: const EdgeInsets.all(12),
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.warning_amber, color: AppColors.white, size: 20),
-                                  const SizedBox(width: 8),
-                                  const Expanded(
-                                    child: Text(
-                                      'Location permission needed for GPS tracking',
-                                      style: TextStyle(color: AppColors.white, fontSize: 12),
-                                    ),
-                                  ),
-                                  TextButton(
-                                    onPressed: _requestLocationPermission,
-                                    child: const Text('Grant', style: TextStyle(color: AppColors.white, fontWeight: FontWeight.bold)),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      Positioned(
-                        right: 12,
-                        top: 12,
-                        child: FloatingActionButton.small(
-                          heroTag: 'locate_me',
-                          backgroundColor: AppColors.skyBlue,
-                          onPressed: _recenterToMyLocation,
-                          child: const Icon(Icons.my_location, color: AppColors.white),
-                        ),
-                      ),
-                    ],
-                  ),
+                  child: _buildMapSection(),
                 ),
-                  Expanded(
+                Expanded(
                   flex: 3,
-                  child: RefreshIndicator(
-                    onRefresh: _loadStudents,
-                    child: SingleChildScrollView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        SizedBox(
-                          width: double.infinity,
-                          height: 60,
-                          child: ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: _isTripActive ? AppColors.dangerRed : AppColors.safeGreen,
-                            ),
-                            onPressed: _isTripActive ? _endTrip : _startTrip,
-                            icon: Icon(_isTripActive ? Icons.stop : Icons.play_arrow, size: 30),
-                            label: Text(
-                              _isTripActive ? 'End Trip' : 'Start Trip',
-                              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        if (_isTripActive)
-                          Row(
-                            children: [
-                              Expanded(
-                                child: OutlinedButton.icon(
-                                  onPressed: _triggerSos,
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: AppColors.dangerRed,
-                                    side: const BorderSide(color: AppColors.dangerRed),
-                                    padding: const EdgeInsets.symmetric(vertical: 12),
-                                  ),
-                                  icon: const Icon(Icons.warning_amber),
-                                  label: const Text('SOS', style: TextStyle(fontWeight: FontWeight.bold)),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: OutlinedButton.icon(
-                                  onPressed: _showReportSheet,
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: AppColors.alertOrange,
-                                    side: const BorderSide(color: AppColors.alertOrange),
-                                    padding: const EdgeInsets.symmetric(vertical: 12),
-                                  ),
-                                  icon: const Icon(Icons.report_problem),
-                                  label: const Text('Report', style: TextStyle(fontWeight: FontWeight.bold)),
-                                ),
-                              ),
-                            ],
-                          ),
-                        const SizedBox(height: 16),
-                        if (_isTripActive)
-                          SegmentedButton<String>(
-                            segments: const [
-                              ButtonSegment(
-                                value: 'BOARDING',
-                                label: Text('Boarding'),
-                                icon: Icon(Icons.airline_seat_recline_normal),
-                              ),
-                              ButtonSegment(
-                                value: 'DROPOFF',
-                                label: Text('Drop-off'),
-                                icon: Icon(Icons.airline_seat_individual_suite),
-                              ),
-                            ],
-                            selected: {_markMode},
-                            onSelectionChanged: (selection) =>
-                                setState(() => _markMode = selection.first),
-                          ),
-                        const SizedBox(height: 16),
-                        Card(
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceAround,
-                              children: [
-                                Column(
-                                  children: [
-                                    Text(
-                                      '${_markMode == 'BOARDING' ? boardedCount : _droppedStudents.values.where((v) => v).length}',
-                                      style: const TextStyle(
-                                        fontSize: 24,
-                                        fontWeight: FontWeight.bold,
-                                        color: AppColors.safeGreen,
-                                      ),
-                                    ),
-                                    Text(_markMode == 'BOARDING' ? 'Boarded' : 'Dropped Off'),
-                                  ],
-                                ),
-                                Column(
-                                  children: [
-                                    Text(
-                                      '${_students.length - (boardedCount)}',
-                                      style: const TextStyle(
-                                        fontSize: 24,
-                                        fontWeight: FontWeight.bold,
-                                        color: AppColors.alertOrange,
-                                      ),
-                                    ),
-                                    const Text('Pending'),
-                                  ],
-                                ),
-                                Column(
-                                  children: [
-                                    Text(
-                                      '${_students.length}',
-                                      style: const TextStyle(
-                                        fontSize: 24,
-                                        fontWeight: FontWeight.bold,
-                                        color: AppColors.skyBlue,
-                                      ),
-                                    ),
-                                    const Text('Total'),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        const Text('Students', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 8),
-                        ..._students.map((student) => _buildStudentCard(student)),
-                      ],
-                    ),
-                  ),
+                  child: _buildStudentSection(boardedCount),
                 ),
-                  ),
               ],
             ),
     );
   }
 
+  Widget _buildMapSection() {
+    return ValueListenableBuilder<bool>(
+      valueListenable: _followGpsNotifier,
+      builder: (context, followGps, _) {
+        return ValueListenableBuilder<Map<String, dynamic>?>(
+          valueListenable: _gpsStatusNotifier,
+          builder: (context, gpsStatus, _) {
+            return Stack(
+              children: [
+                RepaintBoundary(
+                  child: OsmMapWidget(
+                    center: _currentLocation ?? const LatLng(12.9716, 77.5946),
+                    zoom: AppConfig.mapFollowZoom,
+                    controller: _mapController,
+                    myLocation: _currentLocation,
+                    myLocationAccuracy: gpsStatus?['accuracy']?.toDouble(),
+                    myLocationHeading: gpsStatus?['heading']?.toDouble(),
+                    onMapEvent: (event) {
+                      if (event.source == MapEventSource.onDrag ||
+                          event.source == MapEventSource.onMultiFinger ||
+                          event.source == MapEventSource.multiFingerGestureStart ||
+                          event.source == MapEventSource.flingAnimationController) {
+                        if (_followGpsNotifier.value && mounted) {
+                          _followGpsNotifier.value = false;
+                        }
+                      }
+                    },
+                    markers: [
+                      if (_currentLocation != null)
+                        buildBusMarker(_currentLocation!, gpsStatus?['heading']?.toDouble() ?? 0,
+                            widget.busNumber ?? 'BUS', true),
+                    ],
+                  ),
+                ),
+                if (_isTripActive)
+                  Positioned(
+                    bottom: 16,
+                    left: 16,
+                    child: _buildGpsStatusCard(gpsStatus),
+                  ),
+                if (_isTripActive)
+                  Positioned(
+                    top: 12,
+                    left: 0,
+                    right: 0,
+                    child: Center(
+                      child: _buildSpeedCard(gpsStatus),
+                    ),
+                  ),
+                if (!_permissionGranted)
+                  Positioned(
+                    top: 8,
+                    left: 8,
+                    right: 8,
+                    child: Card(
+                      color: AppColors.alertOrange.withValues(alpha: 0.9),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.warning_amber, color: AppColors.white, size: 20),
+                            const SizedBox(width: 8),
+                            const Expanded(
+                              child: Text(
+                                'Location permission needed for GPS tracking',
+                                style: TextStyle(color: AppColors.white, fontSize: 12),
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: _requestLocationPermission,
+                              child: const Text('Grant', style: TextStyle(color: AppColors.white, fontWeight: FontWeight.bold)),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                Positioned(
+                  right: 12,
+                  top: 12,
+                  child: FloatingActionButton.small(
+                    heroTag: 'locate_me',
+                    backgroundColor: AppColors.skyBlue,
+                    onPressed: _recenterToMyLocation,
+                    child: const Icon(Icons.my_location, color: AppColors.white),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildGpsStatusCard(Map<String, dynamic>? status) {
+    final hasFix = status?['hasFix'] == true;
+    final fresh = status?['fresh'] == true;
+    final age = status?['ageSeconds'] ?? -1;
+    final Color color = !hasFix
+        ? AppColors.dangerRed
+        : fresh
+            ? AppColors.safeGreen
+            : AppColors.alertOrange;
+    final String label = !hasFix
+        ? 'Waiting for GPS...'
+        : fresh
+            ? 'GPS live (age ${age}s)'
+            : 'GPS stale (age ${age}s)';
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.circle, color: color, size: 12),
+            const SizedBox(width: 8),
+            Text(label, style: const TextStyle(fontSize: 12)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSpeedCard(Map<String, dynamic>? status) {
+    final speed = status?['speed']?.toDouble() ?? 0;
+    final heading = status?['heading']?.toDouble() ?? 0;
+    return Card(
+      elevation: 4,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.speed,
+              color: speed > 0 ? AppColors.safeGreen : AppColors.medium,
+              size: 22,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              '${(speed).toStringAsFixed(0)} km/h',
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Icon(Icons.navigation, color: AppColors.skyBlue, size: 18),
+            const SizedBox(width: 4),
+            Text('${heading.toStringAsFixed(0)}\u00b0'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStudentSection(int boardedCount) {
+    return RefreshIndicator(
+      onRefresh: _loadStudents,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          SizedBox(
+            width: double.infinity,
+            height: 60,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _isTripActive ? AppColors.dangerRed : AppColors.safeGreen,
+              ),
+              onPressed: _isTripActive ? _endTrip : _startTrip,
+              icon: Icon(_isTripActive ? Icons.stop : Icons.play_arrow, size: 30),
+              label: Text(
+                _isTripActive ? 'End Trip' : 'Start Trip',
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          if (_isTripActive)
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _triggerSos,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.dangerRed,
+                      side: const BorderSide(color: AppColors.dangerRed),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    icon: const Icon(Icons.warning_amber),
+                    label: const Text('SOS', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _showReportSheet,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.alertOrange,
+                      side: const BorderSide(color: AppColors.alertOrange),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    icon: const Icon(Icons.report_problem),
+                    label: const Text('Report', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
+            ),
+          const SizedBox(height: 16),
+          if (_isTripActive)
+            SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(
+                  value: 'BOARDING',
+                  label: Text('Boarding'),
+                  icon: Icon(Icons.airline_seat_recline_normal),
+                ),
+                ButtonSegment(
+                  value: 'DROPOFF',
+                  label: Text('Drop-off'),
+                  icon: Icon(Icons.airline_seat_individual_suite),
+                ),
+              ],
+              selected: {_markMode},
+              onSelectionChanged: (selection) =>
+                  setState(() => _markMode = selection.first),
+            ),
+          const SizedBox(height: 16),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  Column(
+                    children: [
+                      Text(
+                        '${_markMode == 'BOARDING' ? boardedCount : _droppedStudents.values.where((v) => v).length}',
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.safeGreen,
+                        ),
+                      ),
+                      Text(_markMode == 'BOARDING' ? 'Boarded' : 'Dropped Off'),
+                    ],
+                  ),
+                  Column(
+                    children: [
+                      Text(
+                        '${_students.length - (boardedCount)}',
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.alertOrange,
+                        ),
+                      ),
+                      const Text('Pending'),
+                    ],
+                  ),
+                  Column(
+                    children: [
+                      Text(
+                        '${_students.length}',
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.skyBlue,
+                        ),
+                      ),
+                      const Text('Total'),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Text('Students', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: _students.length * 72.0,
+            child: ListView.builder(
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: _students.length,
+              itemBuilder: (context, index) => _buildStudentCard(_students[index]),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildGpsChip() {
-    return StreamBuilder<Map<String, dynamic>>(
-      stream: _locationService.statusStream,
-      builder: (context, snapshot) {
-        final status = snapshot.data;
+    return ValueListenableBuilder<Map<String, dynamic>?>(
+      valueListenable: _gpsStatusNotifier,
+      builder: (context, status, _) {
         final hasFix = status?['hasFix'] == true;
         final fresh = status?['fresh'] == true;
         final Color color = !hasFix

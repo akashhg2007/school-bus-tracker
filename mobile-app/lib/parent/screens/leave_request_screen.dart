@@ -118,101 +118,106 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> {
       appBar: AppBar(title: const Text('Leave Request')),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
+          : ListView(
               padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Submit a new request', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.dark)),
-                          const SizedBox(height: 16),
-                          DropdownButtonFormField<String>(
-                            value: _selectedStudentId,
+              children: [
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Submit a new request', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.dark)),
+                        const SizedBox(height: 16),
+                        DropdownButtonFormField<String>(
+                          value: _selectedStudentId,
+                          decoration: const InputDecoration(
+                            labelText: 'Child',
+                            border: OutlineInputBorder(),
+                            prefixIcon: Icon(Icons.child_care),
+                          ),
+                          items: _children.map<DropdownMenuItem<String>>((c) {
+                            return DropdownMenuItem<String>(
+                              value: c['id'] as String?,
+                              child: Text('${c['name']} (${c['rollNumber'] ?? ''})'),
+                            );
+                          }).toList(),
+                          onChanged: (v) => setState(() => _selectedStudentId = v),
+                        ),
+                        const SizedBox(height: 12),
+                        InkWell(
+                          onTap: _pickDate,
+                          child: InputDecorator(
                             decoration: const InputDecoration(
-                              labelText: 'Child',
+                              labelText: 'Date',
                               border: OutlineInputBorder(),
-                              prefixIcon: Icon(Icons.child_care),
+                              prefixIcon: Icon(Icons.calendar_today),
                             ),
-items: _children.map<DropdownMenuItem<String>>((c) {
-              return DropdownMenuItem<String>(
-                value: c['id'] as String?,
-                child: Text('${c['name']} (${c['rollNumber'] ?? ''})'),
-              );
-            }).toList(),
-                            onChanged: (v) => setState(() => _selectedStudentId = v),
-                          ),
-                          const SizedBox(height: 12),
-                          InkWell(
-                            onTap: _pickDate,
-                            child: InputDecorator(
-                              decoration: const InputDecoration(
-                                labelText: 'Date',
-                                border: OutlineInputBorder(),
-                                prefixIcon: Icon(Icons.calendar_today),
-                              ),
-                              child: Text(DateFormat('yyyy-MM-dd').format(_selectedDate)),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          TextField(
-                            controller: _reasonController,
-                            maxLines: 3,
-                            decoration: const InputDecoration(
-                              labelText: 'Reason',
-                              hintText: 'e.g. Medical appointment, family function',
-                              border: OutlineInputBorder(),
-                              prefixIcon: Icon(Icons.notes),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              onPressed: _submitting ? null : _submit,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.deepBlue,
-                                padding: const EdgeInsets.symmetric(vertical: 14),
-                              ),
-                              child: _submitting
-                                  ? const SizedBox(height: 22, width: 22, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.white))
-                                  : const Text('Submit Leave Request'),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                const SizedBox(height: 16),
-                  const Text('My Requests', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.dark)),
-                  const SizedBox(height: 8),
-                  if (_leaveRequests.isEmpty)
-                    const Card(child: Padding(padding: EdgeInsets.all(16), child: Center(child: Text('No leave requests yet'))))
-                  else
-                    ..._leaveRequests.map((r) {
-                      final student = r['student'];
-                      final date = DateTime.tryParse(r['date'] ?? '') ?? DateTime.now();
-                      return Card(
-                        child: ListTile(
-                          leading: CircleAvatar(backgroundColor: AppColors.skyBlue, child: const Icon(Icons.event_busy, color: AppColors.white)),
-                          title: Text(student?['name'] ?? 'Child'),
-                          subtitle: Text('${DateFormat('yyyy-MM-dd').format(date)}\n${r['reason'] ?? ''}'),
-                          isThreeLine: true,
-                          trailing: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            margin: const EdgeInsets.only(top: 18),
-                            decoration: BoxDecoration(color: _statusColor(r['status'] ?? 'PENDING').withOpacity(0.15), borderRadius: BorderRadius.circular(12)),
-                            child: Text(_statusLabel(r['status'] ?? 'PENDING'), style: TextStyle(color: _statusColor(r['status'] ?? 'PENDING'), fontSize: 12, fontWeight: FontWeight.bold)),
+                            child: Text(DateFormat('yyyy-MM-dd').format(_selectedDate)),
                           ),
                         ),
-                      );
-                    }),
-                ],
-              ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: _reasonController,
+                          maxLines: 3,
+                          decoration: const InputDecoration(
+                            labelText: 'Reason',
+                            hintText: 'e.g. Medical appointment, family function',
+                            border: OutlineInputBorder(),
+                            prefixIcon: Icon(Icons.notes),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: _submitting ? null : _submit,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.deepBlue,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                            ),
+                            child: _submitting
+                                ? const SizedBox(height: 22, width: 22, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.white))
+                                : const Text('Submit Leave Request'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text('My Requests', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.dark)),
+                const SizedBox(height: 8),
+                if (_leaveRequests.isEmpty)
+                  const Card(child: Padding(padding: EdgeInsets.all(16), child: Center(child: Text('No leave requests yet'))))
+                else
+                  SizedBox(
+                    height: _leaveRequests.length * 96.0,
+                    child: ListView.builder(
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: _leaveRequests.length,
+                      itemBuilder: (context, index) {
+                        final r = _leaveRequests[index];
+                        final student = r['student'];
+                        final date = DateTime.tryParse(r['date'] ?? '') ?? DateTime.now();
+                        return Card(
+                          child: ListTile(
+                            leading: CircleAvatar(backgroundColor: AppColors.skyBlue, child: const Icon(Icons.event_busy, color: AppColors.white)),
+                            title: Text(student?['name'] ?? 'Child'),
+                            subtitle: Text('${DateFormat('yyyy-MM-dd').format(date)}\n${r['reason'] ?? ''}'),
+                            isThreeLine: true,
+                            trailing: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              margin: const EdgeInsets.only(top: 18),
+                              decoration: BoxDecoration(color: _statusColor(r['status'] ?? 'PENDING').withValues(alpha: 0.15), borderRadius: BorderRadius.circular(12)),
+                              child: Text(_statusLabel(r['status'] ?? 'PENDING'), style: TextStyle(color: _statusColor(r['status'] ?? 'PENDING'), fontSize: 12, fontWeight: FontWeight.bold)),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+              ],
             ),
     );
   }
