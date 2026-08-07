@@ -237,6 +237,10 @@ export const setupFirstAdmin = async (
       data: {
         name: schoolName || 'My School',
         phone: phone,
+        address: '',
+        city: '',
+        state: '',
+        email: '',
       },
     });
   }
