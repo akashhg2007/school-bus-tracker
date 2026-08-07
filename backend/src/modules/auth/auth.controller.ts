@@ -24,14 +24,14 @@ export const verifyOtp = async (req: Request, res: Response, next: NextFunction)
 
 export const refreshToken = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    // Token refresh logic - generate new token with same payload
-    const user = req.user;
-    if (!user) {
-      throw new Error('User not authenticated');
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      throw new Error('No token provided');
     }
 
-    const { generateToken } = await import('../../middleware/auth');
-    const newToken = generateToken(user);
+    const token = authHeader.split(' ')[1];
+    const { refreshToken: refreshFn } = await import('../../middleware/auth');
+    const newToken = refreshFn(token);
 
     sendSuccess(res, 'Token refreshed successfully', { token: newToken });
   } catch (error) {

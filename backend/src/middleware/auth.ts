@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { UnauthorizedError } from '../utils/errors';
+import { UnauthorizedError, ForbiddenError } from '../utils/errors';
 
 export interface AuthPayload {
   userId: string;
@@ -74,7 +74,7 @@ export const authorize = (...roles: string[]) => {
     }
 
     if (!roles.includes(req.user.userType)) {
-      return next(new UnauthorizedError('Not authorized'));
+      return next(new ForbiddenError('Not authorized'));
     }
 
     next();
