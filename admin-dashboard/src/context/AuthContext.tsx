@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import api from '../services/api';
+import api, { setAuthToken } from '../services/api';
 
 interface User {
   id: string;
@@ -33,22 +33,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        // Try to get user profile from server using httpOnly cookie
-        const response = await api.get('/auth/me');
-        if (response.data?.data) {
-          setUser(response.data.data);
-        }
-      } catch (error) {
-        // Not authenticated - no valid cookie
-        setUser(null);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    checkAuth();
+    // Token is in memory only - session survives React re-renders but not page refresh
+    // This is by design for XSS protection
+    setIsLoading(false);
   }, []);
 
   const login = async (identifier: string, password: string): Promise<{ success: boolean; error?: string }> => {
@@ -57,21 +44,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       const response = await api.post('/auth/login', { identifier, password });
 
-      if (response.status === 200) {
-        const data = response.data.data;
-        const userData: User = {
-          id: data.user.id,
-          name: data.user.name,
-          phone: data.user.phone,
-          email: data.user.email,
-          schoolId: data.user.schoolId,
-          userType: data.user.userType,
-        };
+      const data = response.data.data;
+      const token = data.token;
+      const userData: User = {
+        id: data.user.id,
+        name: data.user.name,
+        phone: data.user.phone,
+        email: data.user.email,
+        schoolId: data.user.schoolId,
+        userType: data.user.userType,
+      };
 
-        setUser(userData);
-        return { success: true };
-      }
-      return { success: false, error: 'Login failed' };
+      setAuthToken(token);
+      setUser(userData);
+
+      return { success: true };
     } catch (error: any) {
       const msg = error?.response?.data?.error?.message || error?.response?.data?.message || error?.message || 'Login failed';
       if (msg.includes('not found') || msg.includes('No account')) {
@@ -86,18 +73,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (msg.includes('locked')) {
         return { success: false, error: 'Account temporarily locked due to too many failed attempts.' };
       }
-      return { success: false, error: 'Login failed. Please try again.' };
+      return { success: false, error: msg || 'Login failed. Please try again.' };
     } finally {
       setIsLoading(false);
     }
   };
 
-  const logout = async () => {
-    try {
-      await api.post('/auth/logout');
-    } catch (error) {
-      // Ignore errors - clear state anyway
-    }
+  const logout = () => {
+    setAuthToken(null);
     setUser(null);
   };
 

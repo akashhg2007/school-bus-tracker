@@ -1,29 +1,28 @@
 import axios from 'axios';
 
+let authToken: string | null = null;
+
+export const setAuthToken = (token: string | null) => { authToken = token; };
+export const getAuthToken = () => authToken;
+
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  withCredentials: true,
+  headers: { 'Content-Type': 'application/json' },
   timeout: 30000,
 });
 
-api.interceptors.request.use(
-  (config) => {
-    // No need to set Authorization header - cookies are sent automatically
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
+api.interceptors.request.use((config) => {
+  if (authToken) {
+    config.headers.Authorization = `Bearer ${authToken}`;
   }
-);
+  return config;
+});
 
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      // Cookie expired or invalid - redirect to login
+      authToken = null;
       window.location.href = '/login';
     }
     return Promise.reject(error);

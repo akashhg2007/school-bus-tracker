@@ -3,7 +3,7 @@ import { io, Socket } from 'socket.io-client';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import api, { unwrapList } from '../services/api';
+import api, { unwrapList, getAuthToken } from '../services/api';
 import StatusBadge from '../components/ui/StatusBadge';
 import PageHeader from '../components/ui/PageHeader';
 import LoadingSkeleton from '../components/ui/LoadingSkeleton';
@@ -105,8 +105,9 @@ const LiveTracking: React.FC = () => {
 
         if (user) {
           try {
+            const token = getAuthToken();
             socket = io(SOCKET_URL, {
-              withCredentials: true,
+              auth: { token },
               transports: ['websocket', 'polling'],
               reconnection: true, reconnectionAttempts: 10, reconnectionDelay: 1000, reconnectionDelayMax: 30000,
             });
