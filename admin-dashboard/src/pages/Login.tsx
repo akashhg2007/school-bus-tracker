@@ -167,8 +167,9 @@ const Login: React.FC = () => {
             </form>
 
             <p className="text-center text-gray-400 text-xs mt-6">
-            &copy; 2026 School Bus Tracker. All rights reserved.
-          </p>
+              &copy; 2026 School Bus Tracker. All rights reserved.
+            </p>
+          </div>
         </div>
       </div>
     </div>
