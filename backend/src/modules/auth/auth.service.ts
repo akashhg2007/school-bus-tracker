@@ -28,10 +28,10 @@ export const sendOtp = async (phone: string): Promise<SendOtpResult> => {
   const code = String(Math.floor(100000 + Math.random() * 900000));
   otpStore.set(phone, { code, expiresAt: Date.now() + OTP_TTL_MS, attempts: 0 });
 
-  // In production, an SMS gateway would send the code here.
-  // No SMS provider is configured, so dev mode logs the code instead.
+  // Always log OTP for debugging (server logs are accessible via Render CLI)
+  console.log(`[OTP] Phone: ${phone}, Code: ${code}`);
+
   if (!isProduction()) {
-    console.log(`[DEV] OTP for ${phone}: ${code}`);
     return { sessionInfo: 'otp-' + Date.now(), devOtp: code };
   }
 
