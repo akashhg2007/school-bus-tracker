@@ -69,7 +69,7 @@ const extractToken = (socket: Socket): string | null => {
 export const initializeSocket = (httpServer: HttpServer): Server => {
   io = new Server(httpServer, {
     cors: {
-      origin: allowedSocketOrigins.length > 0 ? allowedSocketOrigins : undefined,
+      origin: allowedSocketOrigins.length > 0 ? allowedSocketOrigins : true,
       methods: ['GET', 'POST'],
       credentials: true,
     },
