@@ -212,6 +212,66 @@ export const verifyOtp = async (phone: string, otp?: string): Promise<VerifyOtpR
   throw new NotFoundError('User not found with this phone number');
 };
 
+// ==================== FIRST ADMIN SETUP (one-time bootstrap) ====================
+
+export const setupFirstAdmin = async (
+  schoolName: string,
+  adminName: string,
+  phone: string,
+  password: string
+): Promise<{ token: string; user: any }> => {
+  // Check if any admin already exists
+  const existingAdmin = await prisma.admin.findFirst();
+  if (existingAdmin) {
+    throw new BadRequestError('Admin already exists. Use the dashboard to create users.');
+  }
+
+  if (!isValidPhone(phone)) {
+    throw new BadRequestError('Invalid phone number format');
+  }
+
+  // Find or create school
+  let school = await prisma.school.findFirst();
+  if (!school) {
+    school = await prisma.school.create({
+      data: {
+        name: schoolName || 'My School',
+        phone: phone,
+      },
+    });
+  }
+
+  const hashedPassword = await hashPassword(password);
+
+  const admin = await prisma.admin.create({
+    data: {
+      name: adminName,
+      phone,
+      password: hashedPassword,
+      schoolId: school.id,
+    },
+  });
+
+  const payload: AuthPayload = {
+    userId: admin.id,
+    userType: 'ADMIN',
+    schoolId: admin.schoolId,
+  };
+  const token = generateToken(payload);
+
+  return {
+    token,
+    user: {
+      id: admin.id,
+      name: admin.name,
+      phone: admin.phone,
+      userType: 'ADMIN',
+      schoolId: admin.schoolId,
+      schoolName: school.name,
+    },
+  };
+};
+
 // ==================== PASSWORD LOGIN ====================
 
 export const loginWithPassword = async (

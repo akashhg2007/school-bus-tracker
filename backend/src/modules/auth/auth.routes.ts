@@ -99,6 +99,26 @@ const fcmTokenValidation = [
     .withMessage('FCM token is required'),
 ];
 
+const setupValidation = [
+  body('name')
+    .notEmpty()
+    .withMessage('Admin name is required')
+    .isLength({ min: 1, max: 100 }),
+  body('phone')
+    .notEmpty()
+    .withMessage('Phone number is required')
+    .matches(phoneRegex)
+    .withMessage('Invalid phone number format'),
+  body('password')
+    .notEmpty()
+    .withMessage('Password is required')
+    .isLength({ min: 8, max: 128 })
+    .withMessage('Password must be 8-128 characters'),
+];
+
+// First admin setup (no auth required - one-time bootstrap)
+router.post('/setup', validate(setupValidation), authController.setupFirstAdmin);
+
 // Legacy OTP routes (kept for backward compat)
 router.post('/send-otp', validate(sendOtpValidation), authController.sendOtp);
 router.post('/verify-otp', validate(verifyOtpValidation), authController.verifyOtp);

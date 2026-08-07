@@ -8,12 +8,11 @@ async function main() {
 
   const existSchool = await prisma.school.findFirst();
   if (existSchool) {
-    console.log('Database already seeded - skipping');
+    console.log('Database already has data - skipping seed');
     return;
   }
 
-  const defaultPassword = await bcrypt.hash('admin123', 10);
-
+  // Only create minimal infrastructure - no users with passwords
   const school = await prisma.school.create({
     data: {
       name: 'Green Valley School',
@@ -45,76 +44,17 @@ async function main() {
 
   console.log('Route created:', route.id);
 
-  const driver = await prisma.driver.create({
-    data: {
-      name: 'Ramesh Kumar',
-      phone: '5555555555',
-      licenseNumber: 'KA-2023-001',
-      password: defaultPassword,
-      schoolId: school.id,
-    },
-  });
-
-  console.log('Driver created:', driver.id);
-
   const bus = await prisma.bus.create({
     data: {
       busNumber: 'BUS-001',
       plateNumber: 'KA-01-AB-1234',
       capacity: 40,
       schoolId: school.id,
-      driverId: driver.id,
       routeId: route.id,
     },
   });
 
   console.log('Bus created:', bus.id);
-
-  const parent = await prisma.parent.create({
-    data: {
-      name: 'Suresh Kumar',
-      phone: '9876543210',
-      email: 'suresh@example.com',
-      password: defaultPassword,
-      schoolId: school.id,
-    },
-  });
-
-  console.log('Parent created:', parent.id);
-
-  const admin = await prisma.admin.create({
-    data: {
-      name: 'School Admin',
-      phone: '7777777777',
-      email: 'admin@greenvalley.edu.in',
-      password: defaultPassword,
-      schoolId: school.id,
-    },
-  });
-
-  console.log('Admin created:', admin.id);
-
-  const student1 = await prisma.student.create({
-    data: {
-      name: 'Rahul Kumar',
-      rollNumber: '5A01',
-      parentId: parent.id,
-      busId: bus.id,
-      stopId: route.stops[0].id,
-    },
-  });
-
-  const student2 = await prisma.student.create({
-    data: {
-      name: 'Priya Kumar',
-      rollNumber: '3B02',
-      parentId: parent.id,
-      busId: bus.id,
-      stopId: route.stops[1].id,
-    },
-  });
-
-  console.log('Students created:', student1.id, student2.id);
 
   const subscription = await prisma.subscription.create({
     data: {
@@ -128,8 +68,8 @@ async function main() {
   });
 
   console.log('Subscription created:', subscription.id);
-
-  console.log('Database seeded successfully!');
+  console.log('School ID (use for first admin):', school.id);
+  console.log('Database seeded successfully! Create first admin via /api/auth/setup');
 }
 
 main()

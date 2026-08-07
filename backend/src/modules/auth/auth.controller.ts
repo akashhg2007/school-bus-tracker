@@ -3,6 +3,17 @@ import * as authService from './auth.service';
 import { sendSuccess } from '../../utils/response';
 import { setAuthCookie, clearAuthCookie, revokeToken } from '../../middleware/auth';
 
+export const setupFirstAdmin = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { schoolName, name, phone, password } = req.body;
+    const result = await authService.setupFirstAdmin(schoolName, name, phone, password);
+    setAuthCookie(res, result.token);
+    sendSuccess(res, result, 201);
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const sendOtp = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { phone } = req.body;
