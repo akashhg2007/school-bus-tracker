@@ -1,4 +1,4 @@
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import helmet from 'helmet';
 import cors from 'cors';
 import { randomUUID } from 'crypto';
@@ -40,7 +40,7 @@ const locationLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   validate: { xForwardedForHeader: false },
-  keyGenerator: (req: any) => req.user?.id || req.ip,
+  keyGenerator: (req: any) => req.user?.id || ipKeyGenerator(req),
 });
 
 const securityHeaders = helmet({
