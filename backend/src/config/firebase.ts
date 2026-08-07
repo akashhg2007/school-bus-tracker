@@ -7,11 +7,16 @@ export const initializeFirebase = (): admin.app.App => {
     return firebaseApp;
   }
 
-  const serviceAccount = {
-    projectId: process.env.FIREBASE_PROJECT_ID,
-    privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-  };
+  let serviceAccount: admin.ServiceAccount;
+  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+  } else {
+    serviceAccount = {
+      projectId: process.env.FIREBASE_PROJECT_ID,
+      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+    } as admin.ServiceAccount;
+  }
 
   firebaseApp = admin.initializeApp({
     credential: admin.credential.cert(serviceAccount as admin.ServiceAccount),

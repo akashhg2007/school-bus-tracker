@@ -99,10 +99,10 @@ app.use((err: Error, req: express.Request, res: express.Response, next: express.
 const httpServer = http.createServer(app);
 
 // Initialize Firebase (optional - skip if not configured)
-if (process.env.FIREBASE_PROJECT_ID) {
+if (process.env.FIREBASE_SERVICE_ACCOUNT) {
   try {
     initializeFirebase();
-    console.log('Firebase initialized successfully');
+    console.log('Firebase configured - FCM will initialize on first push');
   } catch (error) {
     console.warn('Firebase initialization skipped (configure in .env)');
   }

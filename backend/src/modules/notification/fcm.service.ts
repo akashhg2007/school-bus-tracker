@@ -8,6 +8,10 @@ const getApp = () => {
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT;
   if (!raw) return null;
   try {
+    if (admin.apps && admin.apps.length > 0) {
+      initialized = true;
+      return admin.messaging();
+    }
     const serviceAccount = JSON.parse(raw);
     admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
     initialized = true;
