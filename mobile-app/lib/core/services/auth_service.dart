@@ -44,13 +44,18 @@ class AuthService {
     }
   }
 
-  Future<bool> sendOtp(String phone) async {
+  Future<String?> sendOtp(String phone) async {
     try {
       final api = ApiService();
       final response = await api.sendOtp(phone);
-      return response.statusCode == 200;
+      debugPrint('Send OTP response status: ${response.statusCode}');
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return null;
+      }
+      return 'Server responded with status ${response.statusCode}';
     } catch (e) {
-      return false;
+      debugPrint('Send OTP error: $e');
+      return 'Network error: $e';
     }
   }
 

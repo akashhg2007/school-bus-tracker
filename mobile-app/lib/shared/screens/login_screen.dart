@@ -33,13 +33,13 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() { _isLoading = true; _error = null; });
     final auth = AuthService();
-    final success = await auth.sendOtp(_phoneController.text.trim());
+    final errorMessage = await auth.sendOtp(_phoneController.text.trim());
     setState(() {
       _isLoading = false;
-      if (success) {
+      if (errorMessage == null) {
         _otpSent = true;
       } else {
-        _error = 'Failed to send OTP. Is the server running?';
+        _error = 'Failed to send OTP. $errorMessage';
       }
     });
   }
