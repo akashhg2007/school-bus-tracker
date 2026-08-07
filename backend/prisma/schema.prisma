@@ -234,7 +234,7 @@ model Trip {
   bus           Bus            @relation(fields: [busId], references: [id], onDelete: Restrict)
   driverId      String
   driver        Driver         @relation(fields: [driverId], references: [id], onDelete: Restrict)
-  type          TripType?
+  type          TripType
   status        TripStatus     @default(PENDING)
   startTime     DateTime?
   endTime       DateTime?
@@ -272,7 +272,7 @@ model Attendance {
   student       Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
   tripId        String
   trip          Trip           @relation(fields: [tripId], references: [id], onDelete: Cascade)
-  type          AttendanceType?
+  type          AttendanceType
   status        AttendanceStatus
   markedBy      String
 
@@ -316,7 +316,7 @@ model LeaveRequest {
   parent        Parent         @relation(fields: [parentId], references: [id], onDelete: Cascade)
   date          DateTime
   reason        String
-  status        LeaveStatus?
+  status        LeaveStatus    @default(PENDING)
 
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
@@ -365,7 +365,7 @@ model MaintenanceRecord {
   title       String
   description String?
   dueDate     DateTime
-  status      MaintenanceStatus?
+  status      MaintenanceStatus @default(PENDING)
   completedAt DateTime?
 
   createdAt   DateTime  @default(now())
