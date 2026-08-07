@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'api_service.dart';
 import 'firebase_service.dart';
@@ -30,9 +31,12 @@ class AuthService {
 
     if (_token != null && userJson != null) {
       try {
-        _user = Map<String, dynamic>.from(
-          Map.from(userJson as dynamic),
-        );
+        final decoded = jsonDecode(userJson);
+        if (decoded is Map<String, dynamic>) {
+          _user = decoded;
+        } else {
+          throw const FormatException('Invalid user data');
+        }
         final api = ApiService();
         await api.setToken(_token!);
       } catch (e) {
@@ -88,7 +92,7 @@ class AuthService {
       await prefs.setString('auth_token', _token!);
     }
     if (_user != null) {
-      await prefs.setString('auth_user', _user.toString());
+      await prefs.setString('auth_user', jsonEncode(_user));
     }
   }
 
