@@ -23,7 +23,7 @@ const createDriverValidation = [
     .isString()
     .withMessage('License number must be a string'),
   body('email')
-    .optional()
+    .optional({ values: 'falsy' })
     .isEmail()
     .withMessage('Invalid email'),
   body('password')
@@ -46,11 +46,11 @@ const updateDriverValidation = [
     .isString()
     .withMessage('License number must be a string'),
   body('email')
-    .optional()
+    .optional({ values: 'falsy' })
     .isEmail()
     .withMessage('Invalid email'),
   body('password')
-    .optional()
+    .optional({ values: 'falsy' })
     .isLength({ min: 6 })
     .withMessage('Password must be at least 6 characters'),
   body('isActive')

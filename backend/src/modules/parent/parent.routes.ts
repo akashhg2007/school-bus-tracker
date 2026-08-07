@@ -20,11 +20,11 @@ const createParentValidation = [
     .isLength({ min: 10, max: 15 })
     .withMessage('Phone must be 10-15 digits'),
   body('email')
-    .optional()
+    .optional({ values: 'falsy' })
     .isEmail()
     .withMessage('Invalid email'),
   body('password')
-    .optional()
+    .optional({ values: 'falsy' })
     .isLength({ min: 6 })
     .withMessage('Password must be at least 6 characters'),
 ];
@@ -41,7 +41,7 @@ const updateParentValidation = [
     .isLength({ min: 10, max: 15 })
     .withMessage('Phone must be 10-15 digits'),
   body('email')
-    .optional()
+    .optional({ values: 'falsy' })
     .isEmail()
     .withMessage('Invalid email'),
   body('password')
