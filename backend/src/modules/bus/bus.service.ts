@@ -22,7 +22,6 @@ interface UpdateBusInput {
 }
 
 export const createBus = async (data: CreateBusInput) => {
-  // Check if bus number already exists for this school
   const existingBus = await prisma.bus.findFirst({
     where: {
       busNumber: data.busNumber,
@@ -34,7 +33,17 @@ export const createBus = async (data: CreateBusInput) => {
     throw new ConflictError('Bus with this number already exists');
   }
 
-  // Validate driver if provided
+  const existingPlate = await prisma.bus.findFirst({
+    where: {
+      plateNumber: data.plateNumber,
+      schoolId: data.schoolId,
+    },
+  });
+
+  if (existingPlate) {
+    throw new ConflictError('Bus with this plate number already exists');
+  }
+
   if (data.driverId) {
     const driver = await prisma.driver.findUnique({
       where: { id: data.driverId },
@@ -44,7 +53,6 @@ export const createBus = async (data: CreateBusInput) => {
       throw new NotFoundError('Driver not found');
     }
 
-    // Check if driver is already assigned to another bus
     const driverBus = await prisma.bus.findFirst({
       where: { driverId: data.driverId },
     });
@@ -54,7 +62,6 @@ export const createBus = async (data: CreateBusInput) => {
     }
   }
 
-  // Validate route if provided
   if (data.routeId) {
     const route = await prisma.route.findUnique({
       where: { id: data.routeId },
@@ -114,7 +121,9 @@ export const getBusById = async (busId: string, schoolId?: string) => {
   const bus = await prisma.bus.findUnique({
     where: { id: busId },
     include: {
-      driver: true,
+      driver: {
+        select: { id: true, name: true, phone: true, email: true },
+      },
       route: {
         include: {
           stops: {
@@ -157,7 +166,6 @@ export const updateBus = async (busId: string, data: UpdateBusInput, schoolId?: 
     throw new NotFoundError('Bus not found');
   }
 
-  // Check for conflicts if updating bus number
   if (data.busNumber && data.busNumber !== bus.busNumber) {
     const existingBus = await prisma.bus.findFirst({
       where: {
@@ -171,7 +179,19 @@ export const updateBus = async (busId: string, data: UpdateBusInput, schoolId?: 
     }
   }
 
-  // Validate driver if provided
+  if (data.plateNumber && data.plateNumber !== bus.plateNumber) {
+    const existingPlate = await prisma.bus.findFirst({
+      where: {
+        plateNumber: data.plateNumber,
+        schoolId: bus.schoolId,
+      },
+    });
+
+    if (existingPlate) {
+      throw new ConflictError('Bus with this plate number already exists');
+    }
+  }
+
   if (data.driverId && data.driverId !== bus.driverId) {
     const driver = await prisma.driver.findUnique({
       where: { id: data.driverId },
@@ -181,7 +201,6 @@ export const updateBus = async (busId: string, data: UpdateBusInput, schoolId?: 
       throw new NotFoundError('Driver not found');
     }
 
-    // Check if driver is already assigned to another bus
     const driverBus = await prisma.bus.findFirst({
       where: {
         driverId: data.driverId,
@@ -194,15 +213,18 @@ export const updateBus = async (busId: string, data: UpdateBusInput, schoolId?: 
     }
   }
 
-  // Build update data
-  const updateData: any = { ...data };
-  if (updateData.isActive !== undefined) {
-    updateData.isActive = updateData.isActive ? 1 : 0;
-  }
+  const allowedFields: Record<string, any> = {};
+  if (data.busNumber !== undefined) allowedFields.busNumber = data.busNumber;
+  if (data.plateNumber !== undefined) allowedFields.plateNumber = data.plateNumber;
+  if (data.capacity !== undefined) allowedFields.capacity = data.capacity;
+  if (data.driverId !== undefined) allowedFields.driverId = data.driverId;
+  if (data.routeId !== undefined) allowedFields.routeId = data.routeId;
+  if (data.gpsDeviceId !== undefined) allowedFields.gpsDeviceId = data.gpsDeviceId;
+  if (data.isActive !== undefined) allowedFields.isActive = data.isActive ? 1 : 0;
 
   const updatedBus = await prisma.bus.update({
     where: { id: busId },
-    data: updateData,
+    data: allowedFields,
     include: {
       driver: true,
       route: true,
@@ -216,6 +238,12 @@ export const updateBus = async (busId: string, data: UpdateBusInput, schoolId?: 
 export const deleteBus = async (busId: string, schoolId?: string) => {
   const bus = await prisma.bus.findUnique({
     where: { id: busId },
+    include: {
+      trips: {
+        where: { status: 'IN_PROGRESS' },
+        select: { id: true },
+      },
+    },
   });
 
   if (!bus) {
@@ -226,7 +254,10 @@ export const deleteBus = async (busId: string, schoolId?: string) => {
     throw new NotFoundError('Bus not found');
   }
 
-  // Soft delete - set isActive to false
+  if (bus.trips.length > 0) {
+    throw new BadRequestError('Cannot delete bus with active trips');
+  }
+
   await prisma.bus.update({
     where: { id: busId },
     data: { isActive: 0 },

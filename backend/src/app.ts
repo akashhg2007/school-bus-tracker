@@ -6,7 +6,7 @@ import path from 'path';
 import { initializeFirebase } from './config/firebase';
 import { initializeSocket } from './socket';
 import { AppError } from './utils/errors';
-import { securityHeaders, generalLimiter, authLimiter, corsOptions } from './middleware/security';
+import { securityHeaders, generalLimiter, authLimiter, otpLimiter, corsOptions, requestId } from './middleware/security';
 import prisma from './config/database';
 
 // Import routes
@@ -32,9 +32,10 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Trust proxy (needed for rate limiter on Render)
-app.set('trust proxy', 1);
+app.set('trust proxy', process.env.TRUST_PROXY || 1);
 
 // Middleware
+app.use(requestId);
 app.use(securityHeaders);
 app.use(corsOptions);
 app.use(express.json({ limit: '1mb' }));
@@ -42,10 +43,11 @@ app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 // Rate limiting
 app.use('/api/auth', authLimiter);
+app.use('/api/auth/send-otp', otpLimiter);
 app.use('/api', generalLimiter);
 
 // Health check endpoint
-app.get('/health', (req, res) => {
+app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
@@ -68,36 +70,47 @@ app.use('/api/parents', parentRoutes);
 const clientDist = path.join(__dirname, '..', '..', 'admin-dashboard', 'dist');
 if (fs.existsSync(clientDist)) {
   app.use(express.static(clientDist));
-  // SPA fallback for client-side routing (skip /api and /health)
-  app.get(/^\/(?!api\/|health).*/, (req, res) => {
+  app.get(/^\/(?!api\/|health).*/, (_req, res) => {
     res.sendFile(path.join(clientDist, 'index.html'));
   });
   console.log(`Serving admin dashboard from ${clientDist}`);
 }
 
 // 404 handler
-app.use((req, res) => {
+app.use((_req, res) => {
   res.status(404).json({
     success: false,
     message: 'Route not found',
+    error: 'NOT_FOUND',
   });
 });
 
 // Global error handler
-app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error('Error:', err);
+app.use((err: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  const requestId = (req as any).headers?.['x-request-id'] || 'unknown';
 
   if (err instanceof AppError) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.error(`[${requestId}] Error ${err.statusCode}:`, err.message);
+    }
     res.status(err.statusCode).json({
       success: false,
       message: err.message,
+      requestId,
     });
     return;
+  }
+
+  if (process.env.NODE_ENV !== 'production') {
+    console.error(`[${requestId}] Unhandled error:`, err.message, err.stack);
+  } else {
+    console.error(`[${requestId}] Unhandled error:`, err.message);
   }
 
   res.status(500).json({
     success: false,
     message: 'Internal server error',
+    requestId,
   });
 });
 

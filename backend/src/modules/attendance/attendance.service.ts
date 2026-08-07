@@ -26,30 +26,36 @@ export const markAttendance = async (data: MarkAttendanceInput) => {
   if (!trip) throw new NotFoundError('Trip not found');
   if (trip.status !== 'IN_PROGRESS') throw new BadRequestError('Trip is not in progress');
 
-  const existingAttendance = await prisma.attendance.findFirst({
-    where: {
-      studentId: data.studentId,
-      tripId: data.tripId,
-      type: data.type,
-    },
-  });
-
-  if (existingAttendance) {
-    throw new BadRequestError('Attendance already marked for this student');
+  if (!student.busId || student.busId !== trip.busId) {
+    throw new BadRequestError('Student is not assigned to this bus');
   }
 
-  const attendance = await prisma.attendance.create({
-    data: {
-      studentId: data.studentId,
-      tripId: data.tripId,
-      type: data.type,
-      status: 'PRESENT',
-      markedBy: data.markedBy,
-    },
-    include: {
-      student: { select: { id: true, name: true, rollNumber: true } },
-      trip: { select: { id: true, type: true } },
-    },
+  const attendance = await prisma.$transaction(async (tx) => {
+    const existingAttendance = await tx.attendance.findFirst({
+      where: {
+        studentId: data.studentId,
+        tripId: data.tripId,
+        type: data.type,
+      },
+    });
+
+    if (existingAttendance) {
+      throw new BadRequestError('Attendance already marked for this student');
+    }
+
+    return tx.attendance.create({
+      data: {
+        studentId: data.studentId,
+        tripId: data.tripId,
+        type: data.type,
+        status: 'PRESENT',
+        markedBy: data.markedBy,
+      },
+      include: {
+        student: { select: { id: true, name: true, rollNumber: true } },
+        trip: { select: { id: true, type: true } },
+      },
+    });
   });
 
   const eventName = data.type === 'BOARDING' ? 'attendance:student-boarded' : 'attendance:student-dropped';
@@ -62,7 +68,6 @@ export const markAttendance = async (data: MarkAttendanceInput) => {
     type: data.type,
   });
 
-  // Notify the parent in-app
   try {
     const isEvening = trip.type === 'EVENING';
     const title =
@@ -109,13 +114,20 @@ export const getTripAttendance = async (tripId: string) => {
     include: { stop: { select: { id: true, name: true } } },
   });
 
-  const attendanceMap = new Map(attendance.map((a) => [a.studentId, a]));
+  const boardingMap = new Map<string, any>();
+  const dropoffMap = new Map<string, any>();
+  for (const a of attendance) {
+    if (a.type === 'BOARDING') boardingMap.set(a.studentId, a);
+    if (a.type === 'DROPOFF') dropoffMap.set(a.studentId, a);
+  }
+
   const studentsWithAttendance = busStudents.map((student) => {
-    const boarding = attendanceMap.get(student.id);
+    const boarding = boardingMap.get(student.id);
+    const dropoff = dropoffMap.get(student.id);
     return {
       ...student,
-      isBoarded: boarding?.type === 'BOARDING' && boarding?.status === 'PRESENT',
-      isDropped: boarding?.type === 'DROPOFF' && boarding?.status === 'PRESENT',
+      isBoarded: boarding?.status === 'PRESENT',
+      isDropped: dropoff?.status === 'PRESENT',
     };
   });
 

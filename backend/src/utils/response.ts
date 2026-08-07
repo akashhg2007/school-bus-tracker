@@ -5,14 +5,19 @@ interface ApiResponse<T = any> {
   message: string;
   data?: T;
   error?: string;
+  requestId?: string;
 }
 
 export const sendSuccess = <T>(res: Response, message: string, data?: T, statusCode: number = 200): void => {
   const response: ApiResponse<T> = {
     success: true,
     message,
-    ...(data && { data }),
   };
+  if (data !== undefined) {
+    response.data = data;
+  }
+  const requestId = (res.req as any)?.headers?.['x-request-id'];
+  if (requestId) response.requestId = requestId;
   res.status(statusCode).json(response);
 };
 
@@ -20,8 +25,10 @@ export const sendError = (res: Response, message: string, statusCode: number = 5
   const response: ApiResponse = {
     success: false,
     message,
-    ...(error && { error }),
   };
+  if (error) response.error = error;
+  const requestId = (res.req as any)?.headers?.['x-request-id'];
+  if (requestId) response.requestId = requestId;
   res.status(statusCode).json(response);
 };
 

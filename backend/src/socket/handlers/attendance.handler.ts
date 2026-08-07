@@ -13,7 +13,7 @@ const canMarkForTrip = async (
     where: { id: tripId },
     include: { bus: { select: { driverId: true } } },
   });
-  return !!trip && trip.bus.driverId === driverId;
+  return !!trip && trip.bus.driverId === driverId && trip.status === 'IN_PROGRESS';
 };
 
 export const handleAttendanceEvents = (socket: Socket) => {
@@ -56,7 +56,6 @@ export const handleAttendanceEvents = (socket: Socket) => {
 
       socket.emit('attendance:marked', attendance);
     } catch (error: any) {
-      console.error('Boarding attendance error:', error);
       socket.emit('error', { message: error.message || 'Failed to mark attendance' });
     }
   });
@@ -100,7 +99,6 @@ export const handleAttendanceEvents = (socket: Socket) => {
 
       socket.emit('attendance:marked', attendance);
     } catch (error: any) {
-      console.error('Drop-off attendance error:', error);
       socket.emit('error', { message: error.message || 'Failed to mark attendance' });
     }
   });
@@ -122,6 +120,11 @@ export const handleEmergency = (socket: Socket) => {
         return;
       }
 
+      if (!auth.schoolId) {
+        socket.emit('error', { message: 'School not identified' });
+        return;
+      }
+
       socket.to(`school:${auth.schoolId}`).emit('fleet:emergency-alert', {
         tripId,
         driverId: auth.userId,
@@ -131,7 +134,6 @@ export const handleEmergency = (socket: Socket) => {
 
       socket.emit('emergency:acknowledged', { timestamp: new Date() });
     } catch (error: any) {
-      console.error('Emergency error:', error);
       socket.emit('error', { message: error.message || 'Failed to trigger emergency' });
     }
   });
@@ -144,18 +146,26 @@ export const handleEmergency = (socket: Socket) => {
         return;
       }
 
+      if (!auth.schoolId) {
+        socket.emit('error', { message: 'School not identified' });
+        return;
+      }
+
       const { studentName, message } = data;
+
+      const sanitizedStudentName = typeof studentName === 'string'
+        ? studentName.replace(/[<>]/g, '').substring(0, 100)
+        : 'a student';
 
       socket.to(`school:${auth.schoolId}`).emit('fleet:emergency-alert', {
         parentId: auth.userId,
-        studentName: studentName || 'a student',
-        message: message || 'Emergency triggered by a parent',
+        studentName: sanitizedStudentName,
+        message: typeof message === 'string' ? message.substring(0, 500) : 'Emergency triggered by a parent',
         timestamp: new Date(),
       });
 
       socket.emit('emergency:acknowledged', { timestamp: new Date() });
     } catch (error: any) {
-      console.error('Parent emergency error:', error);
       socket.emit('error', { message: error.message || 'Failed to trigger emergency' });
     }
   });

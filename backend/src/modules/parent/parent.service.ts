@@ -57,7 +57,6 @@ export const getParentsBySchool = async (schoolId: string, page: number = 1, lim
         createdAt: true,
         updatedAt: true,
         schoolId: true,
-        fcmToken: true,
         _count: { select: { students: true } },
         students: {
           select: { id: true, name: true, rollNumber: true },
@@ -85,7 +84,6 @@ export const getParentById = async (parentId: string) => {
       createdAt: true,
       updatedAt: true,
       schoolId: true,
-      fcmToken: true,
       _count: { select: { students: true } },
       students: {
         select: { id: true, name: true, rollNumber: true },
@@ -119,16 +117,15 @@ export const updateParent = async (
     }
   }
 
-  const updateData: any = { ...data };
-  if (updateData.password) {
-    updateData.password = await hashPassword(updateData.password);
-  } else {
-    delete updateData.password;
-  }
+  const allowedFields: Record<string, any> = {};
+  if (data.name !== undefined) allowedFields.name = data.name;
+  if (data.phone !== undefined) allowedFields.phone = data.phone;
+  if (data.email !== undefined) allowedFields.email = data.email;
+  if (data.password) allowedFields.password = await hashPassword(data.password);
 
   const updated = await prisma.parent.update({
     where: { id: parentId },
-    data: updateData,
+    data: allowedFields,
     select: {
       id: true,
       name: true,
@@ -138,7 +135,6 @@ export const updateParent = async (
       createdAt: true,
       updatedAt: true,
       schoolId: true,
-      fcmToken: true,
       _count: { select: { students: true } },
     },
   });
@@ -156,9 +152,16 @@ export const deleteParent = async (parentId: string, schoolId?: string) => {
     throw new NotFoundError('Parent not found');
   }
 
-  await prisma.parent.update({
-    where: { id: parentId },
-    data: { isActive: 0 },
+  await prisma.$transaction(async (tx) => {
+    await tx.student.updateMany({
+      where: { parentId },
+      data: { busId: null, stopId: null },
+    });
+
+    await tx.parent.update({
+      where: { id: parentId },
+      data: { isActive: 0 },
+    });
   });
 
   return { message: 'Parent deactivated successfully' };

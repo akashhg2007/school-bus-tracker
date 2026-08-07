@@ -45,3 +45,15 @@ export class ValidationError extends AppError {
     super(message, 422);
   }
 }
+
+export class TooManyRequestsError extends AppError {
+  constructor(message: string = 'Too many requests') {
+    super(message, 429);
+  }
+}
+
+export class ServiceUnavailableError extends AppError {
+  constructor(message: string = 'Service unavailable') {
+    super(message, 503);
+  }
+}

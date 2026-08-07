@@ -1,42 +1,72 @@
 import * as admin from 'firebase-admin';
+import { getFirebaseMessaging } from '../../config/firebase';
 import prisma from '../../config/database';
 
-let initialized = false;
+let messaging: admin.messaging.Messaging | null = null;
 
-const getApp = () => {
-  if (initialized) return admin.messaging();
-  const raw = process.env.FIREBASE_SERVICE_ACCOUNT;
-  if (!raw) return null;
+const getMessaging = (): admin.messaging.Messaging | null => {
+  if (messaging) return messaging;
   try {
-    if (admin.apps && admin.apps.length > 0) {
-      initialized = true;
-      return admin.messaging();
-    }
-    const serviceAccount = JSON.parse(raw);
-    admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
-    initialized = true;
-    return admin.messaging();
+    messaging = getFirebaseMessaging();
+    return messaging;
   } catch (error) {
-    console.error('FCM init failed:', error);
+    if (process.env.NODE_ENV !== 'production') {
+      console.error('FCM messaging not available:', error);
+    }
     return null;
   }
 };
 
-export const sendPush = async (fcmToken: string, payload: { title: string; body: string; data?: Record<string, any> }) => {
-  const messaging = getApp();
+const MAX_RETRIES = 2;
+
+export const sendPush = async (
+  fcmToken: string,
+  payload: { title: string; body: string; data?: Record<string, any> }
+): Promise<boolean> => {
+  const messaging = getMessaging();
   if (!messaging || !fcmToken) return false;
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      await messaging.send({
+        token: fcmToken,
+        notification: { title: payload.title, body: payload.body },
+        data: payload.data ? Object.fromEntries(Object.entries(payload.data).map(([k, v]) => [k, String(v)])) : undefined,
+        android: { priority: 'high' },
+        apns: { payload: { aps: { sound: 'default' } } },
+      });
+      return true;
+    } catch (error: any) {
+      if (error.code === 'messaging/registration-token-not-registered' && attempt === 0) {
+        await invalidateStaleToken(fcmToken);
+        return false;
+      }
+      if (attempt === MAX_RETRIES) {
+        if (process.env.NODE_ENV !== 'production') {
+          console.error('FCM send failed after retries:', error.message);
+        }
+        return false;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1000 * (attempt + 1)));
+    }
+  }
+  return false;
+};
+
+const invalidateStaleToken = async (fcmToken: string): Promise<void> => {
   try {
-    await messaging.send({
-      token: fcmToken,
-      notification: { title: payload.title, body: payload.body },
-      data: payload.data ? Object.fromEntries(Object.entries(payload.data).map(([k, v]) => [k, String(v)])) : undefined,
-      android: { priority: 'high' },
-      apns: { payload: { aps: { sound: 'default' } } },
+    await prisma.parent.updateMany({
+      where: { fcmToken },
+      data: { fcmToken: null },
     });
-    return true;
+    await prisma.driver.updateMany({
+      where: { fcmToken },
+      data: { fcmToken: null },
+    });
   } catch (error) {
-    console.error('FCM send failed:', error);
-    return false;
+    if (process.env.NODE_ENV !== 'production') {
+      console.error('Failed to invalidate stale FCM token:', error);
+    }
   }
 };
 
@@ -52,7 +82,9 @@ export const getFcmToken = async (userType: string, userId: string): Promise<str
     }
     return null;
   } catch (error) {
-    console.error('Failed to load FCM token:', error);
+    if (process.env.NODE_ENV !== 'production') {
+      console.error('Failed to load FCM token:', error);
+    }
     return null;
   }
 };

@@ -5,9 +5,9 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  timeout: 30000,
 });
 
-// Request interceptor
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
@@ -21,7 +21,6 @@ api.interceptors.request.use(
   }
 );
 
-// Response interceptor
 api.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -34,9 +33,7 @@ api.interceptors.response.use(
   }
 );
 
-// Backend list endpoints return `{ success, message, data: { <items>, total, page, limit } }`.
-// This helper extracts the actual array regardless of the payload shape.
-export const unwrapList = (payload: any): any[] => {
+export const unwrapList = <T = any>(payload: any): T[] => {
   const data = payload?.data ?? payload;
   if (Array.isArray(data)) return data;
   if (data && typeof data === 'object') {

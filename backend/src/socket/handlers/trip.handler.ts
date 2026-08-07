@@ -10,6 +10,8 @@ const isDriver = (socket: Socket): string | null => {
   return null;
 };
 
+const isValidTripType = (type: string): boolean => type === 'MORNING' || type === 'EVENING';
+
 export const handleTripEvents = (socket: Socket) => {
   socket.on('driver:start-trip', async (data) => {
     try {
@@ -26,6 +28,11 @@ export const handleTripEvents = (socket: Socket) => {
         return;
       }
 
+      if (!isValidTripType(type)) {
+        socket.emit('error', { message: 'Invalid trip type. Must be MORNING or EVENING' });
+        return;
+      }
+
       const bus = await prisma.bus.findUnique({
         where: { id: busId },
         select: { id: true, driverId: true },
@@ -39,7 +46,6 @@ export const handleTripEvents = (socket: Socket) => {
       const trip = await startTrip({ busId, driverId, type });
       socket.emit('trip:started', trip);
     } catch (error: any) {
-      console.error('Start trip error:', error);
       socket.emit('error', { message: error.message || 'Failed to start trip' });
     }
   });
@@ -69,10 +75,14 @@ export const handleTripEvents = (socket: Socket) => {
         return;
       }
 
+      if (trip.status !== 'IN_PROGRESS') {
+        socket.emit('error', { message: 'Trip is not in progress' });
+        return;
+      }
+
       const endedTrip = await endTrip(tripId);
       socket.emit('trip:ended', endedTrip);
     } catch (error: any) {
-      console.error('End trip error:', error);
       socket.emit('error', { message: error.message || 'Failed to end trip' });
     }
   });

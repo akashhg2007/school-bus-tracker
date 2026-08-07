@@ -7,25 +7,20 @@ import { verifyToken, AuthPayload } from '../middleware/auth';
 
 let io: Server;
 
-const allowedSocketOrigins = (process.env.ALLOWED_ORIGINS || '')
+const allowedSocketOrigins = (process.env.ALLOWED_ORIGINS || process.env.CORS_ORIGIN || '')
   .split(',')
   .map((o) => o.trim())
   .filter(Boolean);
 
-if (allowedSocketOrigins.length === 0) {
-  allowedSocketOrigins.push(
-    'http://localhost:3000',
-    'http://localhost:5173',
-    'https://school-bus-tracker-atim.onrender.com',
-  );
-}
-
 export const initializeSocket = (httpServer: HttpServer): Server => {
   io = new Server(httpServer, {
     cors: {
-      origin: allowedSocketOrigins,
+      origin: allowedSocketOrigins.length > 0 ? allowedSocketOrigins : undefined,
       methods: ['GET', 'POST'],
     },
+    maxHttpBufferSize: 1e6,
+    pingTimeout: 60000,
+    pingInterval: 25000,
   });
 
   io.use((socket: Socket, next) => {
@@ -43,26 +38,21 @@ export const initializeSocket = (httpServer: HttpServer): Server => {
   });
 
   io.on('connection', (socket: Socket) => {
-    console.log(`Client connected: ${socket.id}`);
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`Client connected: ${socket.id}`);
+    }
 
-    // Handle room joins
     handleJoinRooms(socket);
     handleLeaveRooms(socket);
-
-    // Handle location updates
     handleLocationUpdate(socket);
-
-    // Handle trip events
     handleTripEvents(socket);
-
-    // Handle attendance events
     handleAttendanceEvents(socket);
-
-    // Handle emergency
     handleEmergency(socket);
 
     socket.on('disconnect', () => {
-      console.log(`Client disconnected: ${socket.id}`);
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`Client disconnected: ${socket.id}`);
+      }
     });
   });
 
@@ -79,12 +69,24 @@ export const getSocketIO = (): Server => {
 
 export const emitToRoom = (room: string, event: string, data: any): void => {
   if (io) {
-    io.to(room).emit(event, data);
+    try {
+      io.to(room).emit(event, data);
+    } catch (error) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.error(`Failed to emit to room ${room}:`, error);
+      }
+    }
   }
 };
 
 export const emitToAll = (event: string, data: any): void => {
   if (io) {
-    io.emit(event, data);
+    try {
+      io.emit(event, data);
+    } catch (error) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.error(`Failed to emit event ${event}:`, error);
+      }
+    }
   }
 };

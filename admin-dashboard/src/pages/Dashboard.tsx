@@ -28,6 +28,7 @@ const Dashboard: React.FC = () => {
   });
   const [activeTrips, setActiveTrips] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     loadDashboardData();
@@ -35,6 +36,7 @@ const Dashboard: React.FC = () => {
 
   const loadDashboardData = async () => {
     try {
+      setError(null);
       const [busesRes, tripsRes, studentsRes, parentsRes, driversRes] = await Promise.all([
         api.get('/buses').catch(() => ({ data: { data: [] } })),
         api.get('/trips/active').catch(() => ({ data: { data: [] } })),
@@ -72,9 +74,9 @@ const Dashboard: React.FC = () => {
       });
 
       setActiveTrips(trips.slice(0, 5));
-      setIsLoading(false);
     } catch (error) {
-      console.error('Error loading dashboard:', error);
+      setError('Failed to load dashboard data');
+    } finally {
       setIsLoading(false);
     }
   };
@@ -117,9 +119,21 @@ const Dashboard: React.FC = () => {
     );
   }
 
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <p className="text-red-600 mb-3">{error}</p>
+          <button onClick={loadDashboardData} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      {/* Welcome banner */}
       <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-800 rounded-2xl p-6 text-white relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2"></div>
         <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/5 rounded-full translate-y-1/2 -translate-x-1/2"></div>
@@ -129,7 +143,6 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         {statCards.map((card) => (
           <div key={card.label} className="bg-white rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow border border-gray-100">
@@ -146,9 +159,7 @@ const Dashboard: React.FC = () => {
         ))}
       </div>
 
-      {/* Charts & Active Trips */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Chart */}
         <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-gray-100">
           <div className="p-6 border-b border-gray-100">
             <h2 className="text-lg font-semibold text-gray-800">Fleet Overview</h2>
@@ -175,7 +186,6 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Active Trips */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100">
           <div className="p-6 border-b border-gray-100">
             <h2 className="text-lg font-semibold text-gray-800">Active Trips</h2>

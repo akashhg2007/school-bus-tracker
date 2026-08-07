@@ -1,5 +1,5 @@
 import prisma from '../../config/database';
-import { NotFoundError } from '../../utils/errors';
+import { NotFoundError, BadRequestError } from '../../utils/errors';
 import { emitToRoom } from '../../socket';
 import { calculateDistance, calculateETA, findNearestStop } from '../../utils/distance';
 import { sendNotification } from '../notification/notification.service';
@@ -16,7 +16,18 @@ const MIN_DEDUPE_DISTANCE_M = 10;
 const MAX_DEDUPE_INTERVAL_S = 30;
 const lastSaved = new Map<string, { lat: number; lng: number; at: number }>();
 
+const isValidLatitude = (lat: number): boolean => lat >= -90 && lat <= 90;
+const isValidLongitude = (lng: number): boolean => lng >= -180 && lng <= 180;
+
 export const updateLocation = async (tripId: string, location: LocationUpdate) => {
+  if (!isValidLatitude(location.latitude) || !isValidLongitude(location.longitude)) {
+    throw new BadRequestError('Invalid GPS coordinates');
+  }
+
+  if (location.speed !== undefined && (location.speed < 0 || location.speed > 200)) {
+    throw new BadRequestError('Invalid speed value');
+  }
+
   const trip = await prisma.trip.findUnique({
     where: { id: tripId },
     include: {
@@ -59,7 +70,6 @@ export const updateLocation = async (tripId: string, location: LocationUpdate) =
     at: now,
   });
 
-  // Save GPS location
   const gpsLocation = await prisma.gpsLocation.create({
     data: {
       tripId,
@@ -71,7 +81,6 @@ export const updateLocation = async (tripId: string, location: LocationUpdate) =
     },
   });
 
-  // Get next stop for ETA calculation
   let nextStop = null;
   let etaMinutes = null;
   let distanceKm = null;
@@ -80,7 +89,6 @@ export const updateLocation = async (tripId: string, location: LocationUpdate) =
     const stops = trip.bus.route.stops;
     const currentLocation = { latitude: location.latitude, longitude: location.longitude };
 
-    // Find nearest stop
     const nearestStop = findNearestStop(
       currentLocation,
       stops.map((s) => ({ id: s.id, latitude: s.latitude, longitude: s.longitude }))
@@ -88,7 +96,6 @@ export const updateLocation = async (tripId: string, location: LocationUpdate) =
 
     if (nearestStop) {
       const stopIndex = stops.findIndex((s) => s.id === nearestStop.id);
-      // Get the next stop (not the nearest one if we're between stops)
       const nextStopIndex = stopIndex + 1 < stops.length ? stopIndex + 1 : stopIndex;
       nextStop = stops[nextStopIndex];
 
@@ -101,7 +108,6 @@ export const updateLocation = async (tripId: string, location: LocationUpdate) =
     }
   }
 
-  // Emit location update to parents
   const locationData = {
     tripId: trip.id,
     busId: trip.bus.id,
@@ -122,10 +128,15 @@ export const updateLocation = async (tripId: string, location: LocationUpdate) =
     timestamp: gpsLocation.createdAt,
   };
 
-  emitToRoom(`bus:${trip.busId}`, 'bus:location-update', locationData);
-  emitToRoom(`school:${trip.bus.schoolId}`, 'fleet:location-update', locationData);
+  try {
+    emitToRoom(`bus:${trip.busId}`, 'bus:location-update', locationData);
+    emitToRoom(`school:${trip.bus.schoolId}`, 'fleet:location-update', locationData);
+  } catch (error) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.error('Socket emit failed for location update:', error);
+    }
+  }
 
-  // Check if approaching parent's stop (for each parent with student on this bus)
   if (nextStop && etaMinutes !== null && etaMinutes <= 5) {
     const studentsOnBus = await prisma.student.findMany({
       where: {
@@ -148,7 +159,6 @@ export const updateLocation = async (tripId: string, location: LocationUpdate) =
         busNumber: trip.bus.busNumber,
       });
 
-      // In-app alert with dedupe (one per student/stop within 10 minutes)
       try {
         const recent = await prisma.notification.findFirst({
           where: {
@@ -217,7 +227,7 @@ export const getBusLocation = async (busId: string, schoolId?: string) => {
   return bus.trips[0].gpsLocations[0];
 };
 
-export const getTripLocationHistory = async (tripId: string) => {
+export const getTripLocationHistory = async (tripId: string, page: number = 1, limit: number = 100) => {
   const trip = await prisma.trip.findUnique({
     where: { id: tripId },
   });
@@ -226,17 +236,23 @@ export const getTripLocationHistory = async (tripId: string) => {
     throw new NotFoundError('Trip not found');
   }
 
-  const locations = await prisma.gpsLocation.findMany({
-    where: { tripId },
-    orderBy: { createdAt: 'asc' },
-  });
+  const skip = (page - 1) * limit;
+  const [locations, total] = await Promise.all([
+    prisma.gpsLocation.findMany({
+      where: { tripId },
+      orderBy: { createdAt: 'asc' },
+      skip,
+      take: limit,
+    }),
+    prisma.gpsLocation.count({ where: { tripId } }),
+  ]);
 
-  return locations;
+  return { locations, total, page, limit };
 };
 
 export const getFleetLocations = async (schoolId: string) => {
   const buses = await prisma.bus.findMany({
-    where: { schoolId },
+    where: { schoolId, isActive: 1 },
     include: {
       trips: {
         where: { status: 'IN_PROGRESS' },

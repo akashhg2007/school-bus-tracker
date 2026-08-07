@@ -1,12 +1,22 @@
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 import cors from 'cors';
+import { randomUUID } from 'crypto';
 
-// Rate limiting middleware
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 50,
+  max: 10,
   message: 'Too many authentication attempts, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: { xForwardedForHeader: false },
+  skip: (req) => req.path === '/health',
+});
+
+const otpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: 'Too many OTP requests, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
   validate: { xForwardedForHeader: false },
@@ -19,9 +29,9 @@ const generalLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   validate: { xForwardedForHeader: false },
+  skip: (req) => req.path === '/health',
 });
 
-// Security headers middleware
 const securityHeaders = helmet({
   contentSecurityPolicy: {
     directives: {
@@ -30,7 +40,7 @@ const securityHeaders = helmet({
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
       imgSrc: ["'self'", "data:", "https://images.unsplash.com"],
       scriptSrc: ["'self'", "https://cdn.jsdelivr.net"],
-      connectSrc: ["'self'", "https://api.example.com"],
+      connectSrc: ["'self'", process.env.ALLOWED_ORIGINS || process.env.CORS_ORIGIN || "'self'"].filter(Boolean) as string[],
     },
   },
   crossOriginEmbedderPolicy: false,
@@ -44,7 +54,6 @@ const securityHeaders = helmet({
   xPermittedCrossDomainPolicies: false,
 });
 
-// CORS configuration
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || process.env.CORS_ORIGIN || '')
   .split(',')
   .map((o) => o.trim())
@@ -64,4 +73,9 @@ const corsOptions = cors({
   exposedHeaders: ['Content-Range', 'X-Total-Count'],
 });
 
-export { authLimiter, generalLimiter, securityHeaders, corsOptions };
+const requestId = (req: any, _res: any, next: any) => {
+  req.headers['x-request-id'] = req.headers['x-request-id'] || randomUUID();
+  next();
+};
+
+export { authLimiter, otpLimiter, generalLimiter, securityHeaders, corsOptions, requestId };

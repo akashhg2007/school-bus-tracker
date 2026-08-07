@@ -7,15 +7,28 @@ export const initializeFirebase = (): admin.app.App => {
     return firebaseApp;
   }
 
+  if (admin.apps && admin.apps.length > 0) {
+    firebaseApp = admin.apps[0]!;
+    return firebaseApp;
+  }
+
   let serviceAccount: admin.ServiceAccount;
   if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    try {
+      serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    } catch (error) {
+      throw new Error('FIREBASE_SERVICE_ACCOUNT is not valid JSON');
+    }
   } else {
-    serviceAccount = {
-      projectId: process.env.FIREBASE_PROJECT_ID,
-      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-    } as admin.ServiceAccount;
+    const projectId = process.env.FIREBASE_PROJECT_ID;
+    const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
+    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+
+    if (!projectId || !privateKey || !clientEmail) {
+      throw new Error('Firebase credentials not configured. Set FIREBASE_SERVICE_ACCOUNT or FIREBASE_PROJECT_ID, FIREBASE_PRIVATE_KEY, FIREBASE_CLIENT_EMAIL');
+    }
+
+    serviceAccount = { projectId, privateKey, clientEmail } as admin.ServiceAccount;
   }
 
   firebaseApp = admin.initializeApp({

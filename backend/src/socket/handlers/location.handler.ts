@@ -1,10 +1,12 @@
 import { Socket } from 'socket.io';
 import { updateLocation } from '../../modules/location/location.service';
-import { verifyToken } from '../../middleware/auth';
 import { AuthPayload } from '../../middleware/auth';
 import prisma from '../../config/database';
 
 const getUser = (socket: Socket): AuthPayload | null => (socket.data?.user as AuthPayload) || null;
+
+const isValidLatitude = (lat: any): boolean => typeof lat === 'number' && lat >= -90 && lat <= 90;
+const isValidLongitude = (lng: any): boolean => typeof lng === 'number' && lng >= -180 && lng <= 180;
 
 const canJoinBus = async (socket: Socket, busId: string): Promise<boolean> => {
   const user = getUser(socket);
@@ -32,7 +34,6 @@ const canJoinBus = async (socket: Socket, busId: string): Promise<boolean> => {
     }
     return false;
   } catch (error) {
-    console.error('join:bus authorization error', error);
     return false;
   }
 };
@@ -85,6 +86,16 @@ export const handleLocationUpdate = (socket: Socket) => {
         return;
       }
 
+      if (!isValidLatitude(latitude) || !isValidLongitude(longitude)) {
+        socket.emit('error', { message: 'Invalid GPS coordinates' });
+        return;
+      }
+
+      if (speed !== undefined && (typeof speed !== 'number' || speed < 0 || speed > 200)) {
+        socket.emit('error', { message: 'Invalid speed value' });
+        return;
+      }
+
       const trip = await prisma.trip.findUnique({
         where: { id: tripId },
         include: { bus: { select: { driverId: true } } },
@@ -92,6 +103,11 @@ export const handleLocationUpdate = (socket: Socket) => {
 
       if (!trip || trip.bus.driverId !== user.userId) {
         socket.emit('error', { message: 'Not authorized for this trip' });
+        return;
+      }
+
+      if (trip.status !== 'IN_PROGRESS') {
+        socket.emit('error', { message: 'Trip is not in progress' });
         return;
       }
 
@@ -105,7 +121,6 @@ export const handleLocationUpdate = (socket: Socket) => {
 
       socket.emit('location-update-success', { timestamp: new Date() });
     } catch (error) {
-      console.error('Location update error:', error);
       socket.emit('error', { message: 'Failed to update location' });
     }
   });
@@ -118,7 +133,6 @@ export const handleJoinRooms = (socket: Socket) => {
       return;
     }
     socket.join(`bus:${busId}`);
-    console.log(`Socket ${socket.id} joined room bus:${busId}`);
   });
 
   socket.on('join:school', async (schoolId: string) => {
@@ -128,7 +142,6 @@ export const handleJoinRooms = (socket: Socket) => {
       return;
     }
     socket.join(`school:${schoolId}`);
-    console.log(`Socket ${socket.id} joined room school:${schoolId}`);
   });
 
   socket.on('join:parent', async (parentId: string) => {
@@ -137,7 +150,6 @@ export const handleJoinRooms = (socket: Socket) => {
       return;
     }
     socket.join(`parent:${parentId}`);
-    console.log(`Socket ${socket.id} joined room parent:${parentId}`);
   });
 
   socket.on('join:driver', async (driverId: string) => {
@@ -146,18 +158,19 @@ export const handleJoinRooms = (socket: Socket) => {
       return;
     }
     socket.join(`driver:${driverId}`);
-    console.log(`Socket ${socket.id} joined room driver:${driverId}`);
   });
 };
 
 export const handleLeaveRooms = (socket: Socket) => {
   socket.on('leave:bus', (busId: string) => {
+    const user = getUser(socket);
+    if (!user) return;
     socket.leave(`bus:${busId}`);
-    console.log(`Socket ${socket.id} left room bus:${busId}`);
   });
 
   socket.on('leave:school', (schoolId: string) => {
+    const user = getUser(socket);
+    if (!user || user.schoolId !== schoolId) return;
     socket.leave(`school:${schoolId}`);
-    console.log(`Socket ${socket.id} left room school:${schoolId}`);
   });
 };

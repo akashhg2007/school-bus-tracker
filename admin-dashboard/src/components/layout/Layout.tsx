@@ -1,13 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 
 const Layout: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('darkMode') === 'true');
+  const [darkMode, setDarkMode] = useState(() => {
+    const stored = localStorage.getItem('darkMode');
+    if (stored !== null) return stored === 'true';
+    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
   const { user, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', darkMode);
+  }, []);
 
   const menuItems = [
     { path: '/', label: 'Dashboard', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
@@ -41,13 +49,11 @@ const Layout: React.FC = () => {
 
   return (
     <div className={`min-h-screen ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
-      {/* Sidebar */}
       <div
         className={`fixed inset-y-0 left-0 z-50 flex flex-col transition-all duration-300 ease-in-out ${
           sidebarOpen ? 'w-64' : 'w-20'
         } ${darkMode ? 'bg-gray-800 border-r border-gray-700' : 'bg-white border-r border-gray-100'} shadow-xl`}
       >
-        {/* Logo */}
         <div className={`flex items-center h-16 px-4 ${sidebarOpen ? 'justify-start' : 'justify-center'}`}>
           <div className="flex items-center gap-3">
             <div className="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/25">
@@ -61,7 +67,6 @@ const Layout: React.FC = () => {
           </div>
         </div>
 
-        {/* Navigation */}
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
           {menuItems.map((item) => {
             const active = isActive(item.path);
@@ -92,7 +97,6 @@ const Layout: React.FC = () => {
           })}
         </nav>
 
-        {/* User section at bottom */}
         <div className={`p-3 border-t ${darkMode ? 'border-gray-700' : 'border-gray-100'}`}>
           {sidebarOpen ? (
             <div className={`flex items-center gap-3 p-2 rounded-xl ${darkMode ? 'bg-gray-700' : 'bg-gray-50'}`}>
@@ -101,7 +105,7 @@ const Layout: React.FC = () => {
               </div>
               <div className="flex-1 min-w-0">
                 <p className={`text-sm font-medium truncate ${darkMode ? 'text-white' : 'text-gray-800'}`}>{user?.name}</p>
-                <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Admin</p>
+                <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{user?.userType || 'Admin'}</p>
               </div>
               <button
                 onClick={handleLogout}
@@ -127,9 +131,7 @@ const Layout: React.FC = () => {
         </div>
       </div>
 
-      {/* Main Content */}
       <div className={`transition-all duration-300 ${sidebarOpen ? 'ml-64' : 'ml-20'}`}>
-        {/* Header */}
         <header className={`sticky top-0 z-40 ${darkMode ? 'bg-gray-800/80 backdrop-blur-xl border-b border-gray-700' : 'bg-white/80 backdrop-blur-xl border-b border-gray-100'} h-16 flex items-center justify-between px-6`}>
           <div className="flex items-center gap-4">
             <button
@@ -163,16 +165,19 @@ const Layout: React.FC = () => {
               )}
             </button>
 
-            <button className={`p-2.5 rounded-xl relative ${darkMode ? 'hover:bg-gray-700 text-gray-300' : 'hover:bg-gray-100 text-gray-500'} transition-colors`}>
+            <Link
+              to="/notifications"
+              className={`p-2.5 rounded-xl relative ${darkMode ? 'hover:bg-gray-700 text-gray-300' : 'hover:bg-gray-100 text-gray-500'} transition-colors`}
+              title="Notifications"
+            >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
               </svg>
               <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white"></span>
-            </button>
+            </Link>
           </div>
         </header>
 
-        {/* Page Content */}
         <main className="p-6">
           <Outlet />
         </main>

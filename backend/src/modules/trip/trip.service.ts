@@ -25,7 +25,6 @@ interface StartTripInput {
 }
 
 export const startTrip = async (data: StartTripInput) => {
-  // Check if bus exists
   const bus = await prisma.bus.findUnique({
     where: { id: data.busId },
     include: {
@@ -44,54 +43,47 @@ export const startTrip = async (data: StartTripInput) => {
     throw new NotFoundError('Bus not found');
   }
 
-  // Check if driver exists
-  const driver = await prisma.driver.findUnique({
-    where: { id: data.driverId },
-  });
-
-  if (!driver) {
-    throw new NotFoundError('Driver not found');
+  if (bus.driverId !== data.driverId) {
+    throw new BadRequestError('Driver is not assigned to this bus');
   }
 
-  // Check if there's already an active trip for this bus
-  const activeTrip = await prisma.trip.findFirst({
-    where: {
-      busId: data.busId,
-      status: 'IN_PROGRESS',
-    },
+  const trip = await prisma.$transaction(async (tx) => {
+    const activeTrip = await tx.trip.findFirst({
+      where: {
+        busId: data.busId,
+        status: 'IN_PROGRESS',
+      },
+    });
+
+    if (activeTrip) {
+      throw new BadRequestError('Bus already has an active trip');
+    }
+
+    return tx.trip.create({
+      data: {
+        busId: data.busId,
+        driverId: data.driverId,
+        type: data.type,
+        status: 'IN_PROGRESS',
+        startTime: new Date(),
+      },
+      include: {
+        bus: true,
+        driver: true,
+      },
+    });
   });
 
-  if (activeTrip) {
-    throw new BadRequestError('Bus already has an active trip');
-  }
-
-  // Create trip
-  const trip = await prisma.trip.create({
-    data: {
-      busId: data.busId,
-      driverId: data.driverId,
-      type: data.type,
-      status: 'IN_PROGRESS',
-      startTime: new Date(),
-    },
-    include: {
-      bus: true,
-      driver: true,
-    },
-  });
-
-  // Emit trip started event
   emitToRoom(`school:${bus.schoolId}`, 'trip:started', {
     tripId: trip.id,
     busId: bus.id,
     busNumber: bus.busNumber,
-    driverName: driver.name,
+    driverName: bus.driver?.name,
     type: data.type,
   });
 
-  // Notify parents in-app (FCM push comes separately)
   const startedTitle = data.type === 'EVENING' ? 'Return trip started' : 'Bus has started';
-  const startedBody = `${bus.busNumber} ${data.type === 'EVENING' ? 'return' : 'morning'} trip has started. Driver: ${driver.name}`;
+  const startedBody = `${bus.busNumber} ${data.type === 'EVENING' ? 'return' : 'morning'} trip has started. Driver: ${bus.driver?.name}`;
   await notifyBusParents(bus.id, startedTitle, startedBody, {
     event: data.type === 'EVENING' ? 'return-trip-started' : 'trip-started',
     busId: bus.id,
@@ -131,7 +123,6 @@ export const endTrip = async (tripId: string) => {
     },
   });
 
-  // Emit trip ended event
   emitToRoom(`school:${trip.bus.schoolId}`, 'trip:ended', {
     tripId: trip.id,
     busId: trip.bus.id,
@@ -246,6 +237,7 @@ export const getTripById = async (tripId: string, schoolId?: string) => {
       driver: true,
       gpsLocations: {
         orderBy: { createdAt: 'desc' },
+        take: 500,
       },
       attendance: {
         include: {

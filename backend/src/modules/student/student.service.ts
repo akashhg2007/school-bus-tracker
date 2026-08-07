@@ -1,5 +1,5 @@
 import prisma from '../../config/database';
-import { NotFoundError, ConflictError } from '../../utils/errors';
+import { NotFoundError, ConflictError, BadRequestError } from '../../utils/errors';
 
 interface CreateStudentInput {
   name: string;
@@ -30,8 +30,9 @@ const assertStudentScope = (student: any, scope: StudentScope) => {
   throw new NotFoundError('Student not found');
 };
 
+const BUS_CAPACITY_WARN_THRESHOLD = 0.9;
+
 export const createStudent = async (data: CreateStudentInput, schoolId?: string) => {
-  // Check if parent exists
   const parent = await prisma.parent.findUnique({
     where: { id: data.parentId },
     select: { schoolId: true },
@@ -45,7 +46,6 @@ export const createStudent = async (data: CreateStudentInput, schoolId?: string)
     throw new NotFoundError('Parent not found');
   }
 
-  // Check if roll number already exists for this parent
   const existingStudent = await prisma.student.findFirst({
     where: {
       rollNumber: data.rollNumber,
@@ -57,11 +57,10 @@ export const createStudent = async (data: CreateStudentInput, schoolId?: string)
     throw new ConflictError('Student with this roll number already exists for this parent');
   }
 
-  // Validate bus if provided
   if (data.busId) {
     const bus = await prisma.bus.findUnique({
       where: { id: data.busId },
-      select: { schoolId: true },
+      select: { schoolId: true, capacity: true, _count: { select: { students: true } } },
     });
 
     if (!bus) {
@@ -71,9 +70,12 @@ export const createStudent = async (data: CreateStudentInput, schoolId?: string)
     if (schoolId && bus.schoolId !== schoolId) {
       throw new NotFoundError('Bus not found');
     }
+
+    if (bus._count.students >= bus.capacity) {
+      throw new BadRequestError('Bus is at full capacity');
+    }
   }
 
-  // Validate stop if provided
   if (data.stopId) {
     const stop = await prisma.stop.findUnique({
       where: { id: data.stopId },
@@ -193,7 +195,6 @@ export const updateStudent = async (studentId: string, data: UpdateStudentInput,
     throw new NotFoundError('Student not found');
   }
 
-  // Check for conflicts if updating roll number
   if (data.rollNumber && data.rollNumber !== student.rollNumber) {
     const existingStudent = await prisma.student.findFirst({
       where: {
@@ -207,24 +208,36 @@ export const updateStudent = async (studentId: string, data: UpdateStudentInput,
     }
   }
 
-  // Validate bus if provided
   if (data.busId) {
     const bus = await prisma.bus.findUnique({
       where: { id: data.busId },
+      select: { schoolId: true, capacity: true, _count: { select: { students: true } } },
     });
 
     if (!bus) {
       throw new NotFoundError('Bus not found');
     }
+
+    if (schoolId && bus.schoolId !== schoolId) {
+      throw new NotFoundError('Bus not found');
+    }
+
+    if (bus._count.students >= bus.capacity) {
+      throw new BadRequestError('Bus is at full capacity');
+    }
   }
 
-  // Validate stop if provided
   if (data.stopId) {
     const stop = await prisma.stop.findUnique({
       where: { id: data.stopId },
+      include: { route: { select: { schoolId: true } } },
     });
 
     if (!stop) {
+      throw new NotFoundError('Stop not found');
+    }
+
+    if (schoolId && stop.route.schoolId !== schoolId) {
       throw new NotFoundError('Stop not found');
     }
   }
@@ -262,11 +275,12 @@ export const deleteStudent = async (studentId: string, schoolId?: string) => {
     throw new NotFoundError('Student not found');
   }
 
-  await prisma.student.delete({
+  await prisma.student.update({
     where: { id: studentId },
+    data: { busId: null, stopId: null },
   });
 
-  return { message: 'Student deleted successfully' };
+  return { message: 'Student removed from bus successfully' };
 };
 
 export const assignStudentToBus = async (
@@ -290,6 +304,7 @@ export const assignStudentToBus = async (
 
   const bus = await prisma.bus.findUnique({
     where: { id: busId },
+    select: { id: true, schoolId: true, capacity: true, _count: { select: { students: true } } },
   });
 
   if (!bus) {
@@ -298,6 +313,10 @@ export const assignStudentToBus = async (
 
   if (schoolId && bus.schoolId !== schoolId) {
     throw new NotFoundError('Bus not found');
+  }
+
+  if (bus._count.students >= bus.capacity) {
+    throw new BadRequestError('Bus is at full capacity');
   }
 
   const stop = await prisma.stop.findUnique({

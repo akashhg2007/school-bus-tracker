@@ -5,7 +5,6 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import api, { unwrapList } from '../services/api';
 
-// Fix for default marker icon
 delete (L.Icon.Default.prototype as any)._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
@@ -48,6 +47,7 @@ const LiveTracking: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [emergencyAlert, setEmergencyAlert] = useState<{ message: string; busNumber?: string; studentName?: string; timestamp: string } | null>(null);
   const socketRef = useRef<Socket | null>(null);
+  const alertTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const defaultCenter: [number, number] = [12.9716, 77.5946];
 
@@ -105,7 +105,9 @@ const LiveTracking: React.FC = () => {
 
         setBuses(map);
       } catch (error) {
-        console.error('Error loading live tracking:', error);
+        if (import.meta.env.DEV) {
+          console.error('Error loading live tracking:', error);
+        }
       }
       setIsLoading(false);
     };
@@ -118,6 +120,10 @@ const LiveTracking: React.FC = () => {
         const socket = io(SOCKET_URL, {
           auth: { token },
           transports: ['websocket', 'polling'],
+          reconnection: true,
+          reconnectionAttempts: 10,
+          reconnectionDelay: 1000,
+          reconnectionDelayMax: 30000,
         });
         socketRef.current = socket;
 
@@ -185,18 +191,25 @@ const LiveTracking: React.FC = () => {
               return { ...prev, [data.busId!]: { ...existing, status: 'ON_ROUTE' } };
             });
           }
-          setTimeout(() => setEmergencyAlert(null), 15000);
         });
       } catch (error) {
-        console.error('Error connecting socket:', error);
+        if (import.meta.env.DEV) {
+          console.error('Error connecting socket:', error);
+        }
       }
     }
 
     return () => {
+      if (alertTimeoutRef.current) clearTimeout(alertTimeoutRef.current);
       socketRef.current?.disconnect();
       socketRef.current = null;
     };
   }, []);
+
+  const dismissAlert = () => {
+    if (alertTimeoutRef.current) clearTimeout(alertTimeoutRef.current);
+    setEmergencyAlert(null);
+  };
 
   const getBusStatusText = (bus: BusLocation) => (bus.status === 'ON_ROUTE' ? 'On Route' : 'Not Started');
 
@@ -227,17 +240,18 @@ const LiveTracking: React.FC = () => {
   return (
     <div className="space-y-6">
       {emergencyAlert && (
-        <div className="bg-red-600 text-white p-4 rounded-lg shadow-lg flex items-center justify-between animate-pulse">
+        <div className="bg-red-600 text-white p-4 rounded-lg shadow-lg flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-8 h-8 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
             </svg>
             <div>
               <p className="font-bold text-lg">EMERGENCY ALERT</p>
               <p className="text-sm">{emergencyAlert.message}{emergencyAlert.busNumber ? ` — Bus ${emergencyAlert.busNumber}` : ''}{emergencyAlert.studentName ? ` (${emergencyAlert.studentName})` : ''}</p>
+              <p className="text-xs text-red-200 mt-1">Received at {new Date(emergencyAlert.timestamp).toLocaleTimeString()}</p>
             </div>
           </div>
-          <button onClick={() => setEmergencyAlert(null)} className="text-white hover:text-red-200">
+          <button onClick={dismissAlert} className="text-white hover:text-red-200 flex-shrink-0 ml-4" title="Dismiss">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -256,7 +270,6 @@ const LiveTracking: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Map */}
         <div className="lg:col-span-2 bg-white rounded-lg shadow overflow-hidden">
           <MapContainer
             center={defaultCenter}
@@ -291,7 +304,6 @@ const LiveTracking: React.FC = () => {
           </MapContainer>
         </div>
 
-        {/* Bus List */}
         <div className="bg-white rounded-lg shadow">
           <div className="p-4 border-b border-gray-200">
             <h2 className="font-semibold text-gray-800">All Buses</h2>

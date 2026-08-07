@@ -6,26 +6,31 @@ import * as authController from './auth.controller';
 
 const router = Router();
 
-// OTP validation (kept for backward compat)
+const phoneRegex = /^\+?[1-9]\d{6,14}$/;
+
 const sendOtpValidation = [
   body('phone')
     .notEmpty()
-    .withMessage('Phone number is required'),
+    .withMessage('Phone number is required')
+    .matches(phoneRegex)
+    .withMessage('Invalid phone number format'),
 ];
 
 const verifyOtpValidation = [
   body('phone')
     .notEmpty()
-    .withMessage('Phone number is required'),
+    .withMessage('Phone number is required')
+    .matches(phoneRegex)
+    .withMessage('Invalid phone number format'),
   body('otp')
-    .optional()
+    .notEmpty()
+    .withMessage('OTP is required')
     .isLength({ min: 4, max: 6 })
     .withMessage('OTP must be 4-6 digits')
     .isNumeric()
     .withMessage('OTP must be numeric'),
 ];
 
-// Password login validation
 const loginValidation = [
   body('identifier')
     .notEmpty()
@@ -37,7 +42,6 @@ const loginValidation = [
     .withMessage('Password must be at least 8 characters'),
 ];
 
-// Registration validation
 const registerValidation = [
   body('userType')
     .notEmpty()
@@ -50,8 +54,8 @@ const registerValidation = [
   body('phone')
     .notEmpty()
     .withMessage('Phone number is required')
-    .isLength({ min: 10, max: 15 })
-    .withMessage('Phone must be 10-15 digits'),
+    .matches(phoneRegex)
+    .withMessage('Invalid phone number format'),
   body('email')
     .optional()
     .isEmail()
@@ -70,7 +74,6 @@ const registerValidation = [
     .withMessage('License number is required for drivers'),
 ];
 
-// Activation validation
 const activateValidation = [
   body('token')
     .notEmpty()
@@ -94,7 +97,7 @@ router.post('/verify-otp', validate(verifyOtpValidation), authController.verifyO
 
 // Setup password (admin-only for bootstrapping users)
 router.post('/setup-password', authenticate, authorize('ADMIN'), [
-  body('phone').notEmpty().withMessage('Phone number is required'),
+  body('phone').notEmpty().withMessage('Phone number is required').matches(phoneRegex).withMessage('Invalid phone number format'),
   body('password').notEmpty().withMessage('Password is required').isLength({ min: 8 }).withMessage('Password must be at least 8 characters'),
 ], authController.setupPassword);
 
@@ -102,7 +105,7 @@ router.post('/setup-password', authenticate, authorize('ADMIN'), [
 router.post('/login', validate(loginValidation), authController.login);
 router.post('/register', authenticate, authorize('ADMIN'), validate(registerValidation), authController.register);
 router.post('/activate', validate(activateValidation), authController.activate);
-router.post('/generate-activation', authenticate, authController.generateActivation);
+router.post('/generate-activation', authenticate, authorize('ADMIN'), authController.generateActivation);
 
 // Common routes
 router.get('/me', authenticate, authController.getMe);

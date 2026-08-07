@@ -13,6 +13,8 @@ class SocketService {
   bool _isConnected = false;
   String? _currentBusId;
   String? _currentSchoolId;
+  int _reconnectAttempts = 0;
+  static const int _maxReconnectAttempts = 10;
 
   final StreamController<Map<String, dynamic>> _locationController =
       StreamController<Map<String, dynamic>>.broadcast();
@@ -41,7 +43,6 @@ class SocketService {
 
     final auth = AuthService();
     if (!auth.isAuthenticated) {
-      debugPrint('Cannot connect socket: not authenticated');
       return;
     }
     final token = auth.token;
@@ -53,71 +54,71 @@ class SocketService {
           .enableAutoConnect()
           .enableReconnection()
           .setReconnectionDelay(1000)
+          .setReconnectionDelayMax(30000)
           .setAuth({'token': token})
           .build(),
     );
 
     _socket!.onConnect((_) {
       _isConnected = true;
-      debugPrint('Socket.IO connected');
-
+      _reconnectAttempts = 0;
       if (_currentBusId != null) joinBusRoom(_currentBusId!);
       if (_currentSchoolId != null) joinSchoolRoom(_currentSchoolId!);
     });
 
     _socket!.onDisconnect((_) {
       _isConnected = false;
-      debugPrint('Socket.IO disconnected');
     });
 
     _socket!.onConnectError((error) {
-      debugPrint('Socket.IO connection error: $error');
       _isConnected = false;
+      _reconnectAttempts++;
+      if (_reconnectAttempts >= _maxReconnectAttempts) {
+        disconnect();
+      }
     });
 
     _socket!.onError((error) {
-      debugPrint('Socket.IO error: $error');
-    });
-
-    _socket!.on('location-update', (data) {
-      _locationController.add(Map<String, dynamic>.from(data));
-    });
-
-    _socket!.on('bus-location-update', (data) {
-      _locationController.add(Map<String, dynamic>.from(data));
+      if (kDebugMode) {
+        debugPrint('Socket.IO error: $error');
+      }
     });
 
     _socket!.on('bus:location-update', (data) {
-      _locationController.add(Map<String, dynamic>.from(data));
+      _safeAdd(_locationController, data);
     });
 
     _socket!.on('trip:started', (data) {
-      _tripController.add(Map<String, dynamic>.from(data));
+      _safeAdd(_tripController, data);
     });
 
     _socket!.on('trip:ended', (data) {
-      _tripController.add(Map<String, dynamic>.from(data));
+      _safeAdd(_tripController, data);
     });
 
     _socket!.on('attendance:marked', (data) {
-      _attendanceController.add(Map<String, dynamic>.from(data));
+      _safeAdd(_attendanceController, data);
     });
 
     _socket!.on('fleet:emergency-alert', (data) {
-      _emergencyController.add(Map<String, dynamic>.from(data));
+      _safeAdd(_emergencyController, data);
     });
 
     _socket!.on('notification:new', (data) {
-      _notificationController.add(Map<String, dynamic>.from(data));
+      _safeAdd(_notificationController, data);
     });
 
     _socket!.on('bus:approaching-stop', (data) {
-      _approachingStopController.add(Map<String, dynamic>.from(data));
+      _safeAdd(_approachingStopController, data);
     });
+  }
 
-    _socket!.on('error', (data) {
-      debugPrint('Socket error: $data');
-    });
+  void _safeAdd(StreamController<Map<String, dynamic>> controller, dynamic data) {
+    if (!controller.isClosed) {
+      try {
+        controller.add(Map<String, dynamic>.from(data));
+      } catch (_) {}
+    }
   }
 
   void disconnect() {
@@ -127,6 +128,7 @@ class SocketService {
     _isConnected = false;
     _currentBusId = null;
     _currentSchoolId = null;
+    _reconnectAttempts = 0;
   }
 
   void joinBusRoom(String busId) {

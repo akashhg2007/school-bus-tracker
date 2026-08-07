@@ -47,12 +47,25 @@ export const sendNotification = async (data: SendNotificationInput, schoolId?: s
   });
 
   const roomName = `${data.userType.toLowerCase()}:${data.userId}`;
-  emitToRoom(roomName, 'notification:new', notification);
+  try {
+    emitToRoom(roomName, 'notification:new', notification);
+  } catch (error) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.error('Socket emit failed for notification:', error);
+    }
+  }
 
   if (data.userType === 'PARENT' || data.userType === 'DRIVER') {
-    getFcmToken(data.userType, data.userId).then((token) => {
-      if (token) sendPush(token, { title: data.title, body: data.body, data: data.data });
-    });
+    try {
+      const token = await getFcmToken(data.userType, data.userId);
+      if (token) {
+        await sendPush(token, { title: data.title, body: data.body, data: data.data });
+      }
+    } catch (error) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('FCM push failed:', error);
+      }
+    }
   }
 
   return notification;
@@ -77,11 +90,22 @@ export const sendBulkNotification = async (
 
   for (const user of userIds) {
     const roomName = `${user.userType.toLowerCase()}:${user.userId}`;
-    emitToRoom(roomName, 'notification:new', { title, body, data });
+    try {
+      emitToRoom(roomName, 'notification:new', { title, body, data });
+    } catch (error) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('Socket emit failed for bulk notification:', error);
+      }
+    }
     if (user.userType === 'PARENT' || user.userType === 'DRIVER') {
-      getFcmToken(user.userType, user.userId).then((token) => {
-        if (token) sendPush(token, { title, body, data });
-      });
+      try {
+        const token = await getFcmToken(user.userType, user.userId);
+        if (token) await sendPush(token, { title, body, data });
+      } catch (error) {
+        if (process.env.NODE_ENV !== 'production') {
+          console.error('FCM push failed for bulk:', error);
+        }
+      }
     }
   }
 
@@ -122,7 +146,11 @@ export const markAsRead = async (notificationId: string, userId?: string, userTy
   const notification = await prisma.notification.findUnique({ where: { id: notificationId } });
   if (!notification) throw new NotFoundError('Notification not found');
 
-  if (userId && (notification.userId !== userId || notification.userType !== userType)) {
+  if (!userId || !userType) {
+    throw new NotFoundError('User identification required');
+  }
+
+  if (notification.userId !== userId || notification.userType !== userType) {
     throw new NotFoundError('Notification not found');
   }
 

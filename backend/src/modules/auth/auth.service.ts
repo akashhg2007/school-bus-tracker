@@ -3,6 +3,7 @@ import { generateToken, AuthPayload } from '../../middleware/auth';
 import { NotFoundError, UnauthorizedError, ConflictError, BadRequestError } from '../../utils/errors';
 import { hashPassword, comparePassword } from '../../utils/password';
 import crypto from 'crypto';
+import timingSafeEqual from 'crypto';
 
 interface SendOtpResult {
   sessionInfo: string;
@@ -47,14 +48,27 @@ const OTP_TTL_MS = 5 * 60 * 1000;
 const MAX_ATTEMPTS = 5;
 const otpStore = new Map<string, { code: string; expiresAt: number; attempts: number }>();
 
-const ACTIVATION_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const ACTIVATION_TTL_MS = 24 * 60 * 60 * 1000;
 const activationStore = new Map<string, { userId: string; userType: string; expiresAt: number }>();
 
 const isProduction = (): boolean => process.env.NODE_ENV === 'production';
 
+const constantTimeCompare = (a: string, b: string): boolean => {
+  if (a.length !== b.length) return false;
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  return require('crypto').timingSafeEqual(bufA, bufB);
+};
+
+const isValidPhone = (phone: string): boolean => /^\+?[1-9]\d{6,14}$/.test(phone);
+
 // ==================== OTP (kept for backward compat) ====================
 
 export const sendOtp = async (phone: string): Promise<SendOtpResult> => {
+  if (!isValidPhone(phone)) {
+    throw new BadRequestError('Invalid phone number format');
+  }
+
   const code = String(crypto.randomInt(100000, 999999));
   otpStore.set(phone, { code, expiresAt: Date.now() + OTP_TTL_MS, attempts: 0 });
 
@@ -80,7 +94,7 @@ export const verifyOtp = async (phone: string, otp?: string): Promise<VerifyOtpR
       otpStore.delete(phone);
       throw new UnauthorizedError('Too many OTP attempts, request a new code');
     }
-    if (String(otp).trim() !== entry.code) {
+    if (!constantTimeCompare(String(otp).trim(), entry.code)) {
       entry.attempts += 1;
       throw new UnauthorizedError('Invalid OTP');
     }
@@ -173,7 +187,6 @@ export const loginWithPassword = async (
   identifier: string,
   password: string
 ): Promise<LoginResult> => {
-  // Try to find user by phone or email across all three tables
   const whereClause = {
     OR: [
       { phone: identifier },
@@ -182,7 +195,6 @@ export const loginWithPassword = async (
     isActive: 1,
   };
 
-  // Check parent
   const parent = await prisma.parent.findFirst({
     where: whereClause,
     include: { school: true },
@@ -216,7 +228,6 @@ export const loginWithPassword = async (
     };
   }
 
-  // Check driver
   const driver = await prisma.driver.findFirst({
     where: whereClause,
     include: { school: true },
@@ -250,7 +261,6 @@ export const loginWithPassword = async (
     };
   }
 
-  // Check admin
   const admin = await prisma.admin.findFirst({
     where: whereClause,
     include: { school: true },
@@ -293,7 +303,13 @@ export const generateActivationToken = async (
   userId: string,
   userType: 'PARENT' | 'DRIVER' | 'ADMIN'
 ): Promise<string> => {
-  const token = require('crypto').randomBytes(32).toString('hex');
+  for (const [existingToken, entry] of activationStore) {
+    if (entry.userId === userId && entry.userType === userType) {
+      activationStore.delete(existingToken);
+    }
+  }
+
+  const token = crypto.randomBytes(32).toString('hex');
   activationStore.set(token, {
     userId,
     userType,
@@ -358,6 +374,10 @@ export const registerUser = async (
     licenseNumber?: string;
   }
 ): Promise<RegisterResult> => {
+  if (!isValidPhone(data.phone)) {
+    throw new BadRequestError('Invalid phone number format');
+  }
+
   const hashedPassword = await hashPassword(data.password);
 
   if (userType === 'PARENT') {

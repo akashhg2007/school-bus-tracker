@@ -80,7 +80,6 @@ export const getDriversBySchool = async (schoolId: string, page: number = 1, lim
         isActive: true,
         createdAt: true,
         updatedAt: true,
-        fcmToken: true,
         bus: {
           select: { id: true, busNumber: true, plateNumber: true },
         },
@@ -109,7 +108,6 @@ export const getDriverById = async (driverId: string, schoolId?: string) => {
       isActive: true,
       createdAt: true,
       updatedAt: true,
-      fcmToken: true,
       bus: true,
       trips: {
         orderBy: { createdAt: 'desc' },
@@ -171,19 +169,17 @@ export const updateDriver = async (
     }
   }
 
-  const updateData: any = { ...data };
-  if (updateData.isActive !== undefined) {
-    updateData.isActive = updateData.isActive ? 1 : 0;
-  }
-  if (updateData.password) {
-    updateData.password = await hashPassword(updateData.password);
-  } else {
-    delete updateData.password;
-  }
+  const allowedFields: Record<string, any> = {};
+  if (data.name !== undefined) allowedFields.name = data.name;
+  if (data.phone !== undefined) allowedFields.phone = data.phone;
+  if (data.licenseNumber !== undefined) allowedFields.licenseNumber = data.licenseNumber;
+  if (data.email !== undefined) allowedFields.email = data.email;
+  if (data.isActive !== undefined) allowedFields.isActive = data.isActive ? 1 : 0;
+  if (data.password) allowedFields.password = await hashPassword(data.password);
 
   const updatedDriver = await prisma.driver.update({
     where: { id: driverId },
-    data: updateData,
+    data: allowedFields,
     select: {
       id: true,
       name: true,
@@ -194,7 +190,6 @@ export const updateDriver = async (
       isActive: true,
       createdAt: true,
       updatedAt: true,
-      fcmToken: true,
       bus: true,
     },
   });
@@ -215,9 +210,16 @@ export const deleteDriver = async (driverId: string, schoolId?: string) => {
     throw new NotFoundError('Driver not found');
   }
 
-  await prisma.driver.update({
-    where: { id: driverId },
-    data: { isActive: 0 },
+  await prisma.$transaction(async (tx) => {
+    await tx.bus.updateMany({
+      where: { driverId },
+      data: { driverId: null },
+    });
+
+    await tx.driver.update({
+      where: { id: driverId },
+      data: { isActive: 0 },
+    });
   });
 
   return { message: 'Driver deleted successfully' };
@@ -236,7 +238,6 @@ export const getDriverProfile = async (driverId: string) => {
       isActive: true,
       createdAt: true,
       updatedAt: true,
-      fcmToken: true,
       school: {
         select: { id: true, name: true, address: true, phone: true },
       },
