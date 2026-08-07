@@ -144,67 +144,81 @@ export const updateLocation = async (tripId: string, location: LocationUpdate) =
     timestamp: gpsLocation.createdAt,
   };
 
-  try {
-    emitToRoom(`bus:${trip.busId}`, 'bus:location-update', locationData);
-    emitToRoom(`school:${trip.bus.schoolId}`, 'fleet:location-update', locationData);
-  } catch (error) {
-    if (process.env.NODE_ENV !== 'production') {
-      console.error('Socket emit failed for location update:', error);
+  // Non-blocking Socket.IO emit - don't await, fire and forget
+  process.nextTick(() => {
+    try {
+      emitToRoom(`bus:${trip.busId}`, 'bus:location-update', locationData);
+      emitToRoom(`school:${trip.bus.schoolId}`, 'fleet:location-update', locationData);
+    } catch (error) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('Socket emit failed for location update:', error);
+      }
     }
-  }
+  });
 
+  // Approaching-stop notifications run asynchronously - don't block response
   if (nextStop && etaMinutes !== null && etaMinutes <= 5) {
-    const studentsOnBus = await prisma.student.findMany({
-      where: {
-        busId: trip.busId,
-        stopId: nextStop.id,
-      },
-      select: { id: true, name: true, parentId: true },
-    });
-
-    const parentIds = [...new Set(studentsOnBus.map((s) => s.parentId))];
-    const recentNotifications = await prisma.notification.findMany({
-      where: {
-        parentId: { in: parentIds },
-        data: { contains: `"event":"approaching-stop"` },
-        createdAt: { gte: new Date(Date.now() - 10 * 60 * 1000) },
-      },
-      select: { parentId: true, data: true },
-    });
-
-    const alreadyNotified = new Set(
-      recentNotifications
-        .filter((n) => n.data?.includes(`"stopId":"${nextStop.id}"`))
-        .map((n) => n.parentId)
-    );
-
-    for (const student of studentsOnBus) {
-      emitToRoom(`parent:${student.parentId}`, 'bus:approaching-stop', {
-        studentId: student.id,
-        studentName: student.name,
-        stopName: nextStop.name,
-        eta: etaMinutes,
-        busNumber: trip.bus.busNumber,
-      });
-    }
-
-    const studentsToNotify = studentsOnBus.filter((s) => !alreadyNotified.has(s.parentId));
-    await Promise.allSettled(
-      studentsToNotify.map((student) =>
-        sendNotification({
-          parentId: student.parentId,
-          title: 'Bus approaching stop',
-          body: `Bus ${trip.bus.busNumber} is arriving at ${nextStop.name} in ~${Math.round(etaMinutes)} min for ${student.name}.`,
-          data: {
-            event: 'approaching-stop',
-            studentId: student.id,
+    process.nextTick(async () => {
+      try {
+        const studentsOnBus = await prisma.student.findMany({
+          where: {
+            busId: trip.busId,
             stopId: nextStop.id,
+          },
+          select: { id: true, name: true, parentId: true },
+        });
+
+        const parentIds = [...new Set(studentsOnBus.map((s) => s.parentId))];
+        const recentNotifications = await prisma.notification.findMany({
+          where: {
+            parentId: { in: parentIds },
+            data: { contains: `"event":"approaching-stop"` },
+            createdAt: { gte: new Date(Date.now() - 10 * 60 * 1000) },
+          },
+          select: { parentId: true, data: true },
+        });
+
+        const alreadyNotified = new Set(
+          recentNotifications
+            .filter((n) => n.data?.includes(`"stopId":"${nextStop.id}"`))
+            .map((n) => n.parentId)
+        );
+
+        // Batch Socket.IO emits
+        const studentsToNotify = studentsOnBus.filter((s) => !alreadyNotified.has(s.parentId));
+        for (const student of studentsToNotify) {
+          emitToRoom(`parent:${student.parentId}`, 'bus:approaching-stop', {
+            studentId: student.id,
+            studentName: student.name,
+            stopName: nextStop.name,
             eta: etaMinutes,
             busNumber: trip.bus.busNumber,
-          },
-        })
-      )
-    );
+          });
+        }
+
+        // Batch notification sends
+        await Promise.allSettled(
+          studentsToNotify.map((student) =>
+            sendNotification({
+              parentId: student.parentId,
+              title: 'Bus approaching stop',
+              body: `Bus ${trip.bus.busNumber} is arriving at ${nextStop.name} in ~${Math.round(etaMinutes)} min for ${student.name}.`,
+              data: {
+                event: 'approaching-stop',
+                studentId: student.id,
+                stopId: nextStop.id,
+                eta: etaMinutes,
+                busNumber: trip.bus.busNumber,
+              },
+            })
+          )
+        );
+      } catch (error) {
+        if (process.env.NODE_ENV !== 'production') {
+          console.error('Approaching-stop notification failed:', error);
+        }
+      }
+    });
   }
 
   return gpsLocation;
