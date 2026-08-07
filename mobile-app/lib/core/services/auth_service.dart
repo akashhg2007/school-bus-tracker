@@ -34,8 +34,14 @@ class AuthService {
     _initialized = true;
 
     try {
-      _token = await _secureStorage.read(key: 'auth_token');
-      final userJson = await _secureStorage.read(key: 'auth_user');
+      _token = await _secureStorage.read(key: 'auth_token').timeout(
+        const Duration(seconds: 5),
+        onTimeout: () => null,
+      );
+      final userJson = await _secureStorage.read(key: 'auth_user').timeout(
+        const Duration(seconds: 5),
+        onTimeout: () => null,
+      );
 
       if (_token != null && userJson != null) {
         final decoded = jsonDecode(userJson);
@@ -50,8 +56,10 @@ class AuthService {
     } catch (e) {
       _token = null;
       _user = null;
-      await _secureStorage.delete(key: 'auth_token');
-      await _secureStorage.delete(key: 'auth_user');
+      try {
+        await _secureStorage.delete(key: 'auth_token').timeout(const Duration(seconds: 3), onTimeout: () {});
+        await _secureStorage.delete(key: 'auth_user').timeout(const Duration(seconds: 3), onTimeout: () {});
+      } catch (_) {}
     }
   }
 
@@ -119,6 +127,16 @@ class AuthService {
       if (msg.contains('Connection refused') || msg.contains('SocketException')) {
         return 'Cannot reach server. Check your internet connection.';
       }
+      // Try to extract server error message
+      try {
+        final dioError = e as dynamic;
+        final serverMsg = dioError.response?.data?['message'];
+        if (serverMsg != null && serverMsg is String) return serverMsg;
+        final errors = dioError.response?.data?['errors'];
+        if (errors is List && errors.isNotEmpty) {
+          return errors.map((e) => e['message']).join('. ');
+        }
+      } catch (_) {}
       if (msg.contains('401') || msg.contains('Invalid credentials')) {
         return 'Invalid email/phone or password.';
       }
@@ -147,19 +165,29 @@ class AuthService {
   }
 
   Future<void> _persistAuth() async {
-    if (_token != null) {
-      await _secureStorage.write(key: 'auth_token', value: _token!);
-    }
-    if (_user != null) {
-      await _secureStorage.write(key: 'auth_user', value: jsonEncode(_user));
-    }
+    try {
+      if (_token != null) {
+        await _secureStorage.write(key: 'auth_token', value: _token!).timeout(
+          const Duration(seconds: 5),
+          onTimeout: () {},
+        );
+      }
+      if (_user != null) {
+        await _secureStorage.write(key: 'auth_user', value: jsonEncode(_user)).timeout(
+          const Duration(seconds: 5),
+          onTimeout: () {},
+        );
+      }
+    } catch (_) {}
   }
 
   Future<void> logout() async {
     _token = null;
     _user = null;
-    await _secureStorage.delete(key: 'auth_token');
-    await _secureStorage.delete(key: 'auth_user');
+    try {
+      await _secureStorage.delete(key: 'auth_token').timeout(const Duration(seconds: 3), onTimeout: () {});
+      await _secureStorage.delete(key: 'auth_user').timeout(const Duration(seconds: 3), onTimeout: () {});
+    } catch (_) {}
     final api = ApiService();
     await api.clearToken();
     SocketService().disconnect();

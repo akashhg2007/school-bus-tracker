@@ -40,8 +40,8 @@ const loginValidation = [
   body('password')
     .notEmpty()
     .withMessage('Password is required')
-    .isLength({ min: 8, max: 128 })
-    .withMessage('Password must be 8-128 characters'),
+    .isLength({ min: 6, max: 128 })
+    .withMessage('Password must be 6-128 characters'),
 ];
 
 const registerValidation = [

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:permission_handler/permission_handler.dart';
 import '../../core/config/theme.dart';
 import '../../core/services/auth_service.dart';
 import '../screens/login_screen.dart';
@@ -17,65 +16,58 @@ class PermissionScreen extends StatefulWidget {
 
 class _PermissionScreenState extends State<PermissionScreen> {
   bool _isRequesting = false;
-  bool _allGranted = false;
-  Map<String, bool> _permissionStatus = {};
+  bool _locationGranted = false;
 
   @override
   void initState() {
     super.initState();
-    _checkPermissions();
+    _checkLocation();
   }
 
-  Future<void> _checkPermissions() async {
-    final status = <String, bool>{};
+  Future<void> _checkLocation() async {
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      if (mounted) setState(() => _locationGranted = false);
+      return;
+    }
 
-    status['location'] = await Geolocator.isLocationServiceEnabled();
+    final perm = await Geolocator.checkPermission();
+    final granted = perm == LocationPermission.always || perm == LocationPermission.whileInUse;
+    if (mounted) setState(() => _locationGranted = granted);
+  }
 
-    final locPerm = await Geolocator.checkPermission();
-    status['location_perm'] = locPerm == LocationPermission.always ||
-        locPerm == LocationPermission.whileInUse;
+  Future<void> _requestLocation() async {
+    setState(() => _isRequesting = true);
 
-    status['notification'] = await Permission.notification.isGranted;
-    status['phone'] = await Permission.phone.isGranted;
-    status['sms'] = await Permission.sms.isGranted;
-    status['camera'] = await Permission.camera.isGranted;
-    status['storage'] = await Permission.storage.isGranted;
+    var serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      await Geolocator.openLocationSettings();
+      await Future.delayed(const Duration(seconds: 3));
+      serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        if (mounted) setState(() => _isRequesting = false);
+        return;
+      }
+    }
 
-    final allOk = status.values.every((v) => v);
+    var perm = await Geolocator.checkPermission();
+    if (perm == LocationPermission.denied) {
+      perm = await Geolocator.requestPermission();
+    }
+    if (perm == LocationPermission.deniedForever) {
+      await Geolocator.openAppSettings();
+      await Future.delayed(const Duration(seconds: 2));
+      perm = await Geolocator.checkPermission();
+    }
+
+    final granted = perm == LocationPermission.always || perm == LocationPermission.whileInUse;
 
     if (mounted) {
       setState(() {
-        _permissionStatus = status;
-        _allGranted = allOk;
+        _locationGranted = granted;
+        _isRequesting = false;
       });
-    }
-  }
-
-  Future<void> _requestAllPermissions() async {
-    setState(() => _isRequesting = true);
-
-    await Geolocator.openLocationSettings();
-    await Future.delayed(const Duration(seconds: 2));
-
-    final locPerm = await Geolocator.requestPermission();
-    if (locPerm == LocationPermission.deniedForever) {
-      await Geolocator.openAppSettings();
-    }
-
-    await Permission.notification.request();
-    await Permission.phone.request();
-    await Permission.sms.request();
-    await Permission.camera.request();
-    await Permission.storage.request();
-
-    await _checkPermissions();
-
-    if (mounted) {
-      setState(() => _isRequesting = false);
-
-      if (_allGranted) {
-        _navigateToApp();
-      }
+      if (granted) _navigateToApp();
     }
   }
 
@@ -126,34 +118,53 @@ class _PermissionScreenState extends State<PermissionScreen> {
                     color: AppColors.deepBlue,
                     borderRadius: BorderRadius.circular(20),
                   ),
-                  child: const Icon(Icons.security, size: 60, color: AppColors.white),
+                  child: const Icon(Icons.directions_bus, size: 60, color: AppColors.white),
                 ),
                 const SizedBox(height: 24),
                 const Text(
-                  'Permissions Required',
+                  'School Bus Tracker',
                   style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.deepBlue),
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'This app needs the following permissions to work properly',
+                  'We need location access to track your bus in real-time',
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 14, color: AppColors.medium),
                 ),
                 const SizedBox(height: 32),
-                _buildPermissionTile(Icons.location_on, 'Location', 'Track bus location in real-time', _permissionStatus['location_perm'] ?? false),
-                _buildPermissionTile(Icons.notifications, 'Notifications', 'Receive trip updates and alerts', _permissionStatus['notification'] ?? false),
-                _buildPermissionTile(Icons.phone, 'Phone', 'Emergency contact features', _permissionStatus['phone'] ?? false),
-                _buildPermissionTile(Icons.message, 'SMS', 'Send emergency messages', _permissionStatus['sms'] ?? false),
-                _buildPermissionTile(Icons.camera, 'Camera', 'Scan QR codes', _permissionStatus['camera'] ?? false),
-                _buildPermissionTile(Icons.storage, 'Storage', 'Save offline data', _permissionStatus['storage'] ?? false),
+                Card(
+                  child: ListTile(
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: _locationGranted
+                            ? AppColors.safeGreen.withOpacity(0.1)
+                            : AppColors.alertOrange.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(
+                        Icons.location_on,
+                        color: _locationGranted ? AppColors.safeGreen : AppColors.alertOrange,
+                        size: 24,
+                      ),
+                    ),
+                    title: const Text('Location', style: TextStyle(fontWeight: FontWeight.w600)),
+                    subtitle: const Text('Required for bus tracking', style: TextStyle(fontSize: 12, color: AppColors.medium)),
+                    trailing: Icon(
+                      _locationGranted ? Icons.check_circle : Icons.arrow_forward_ios,
+                      color: _locationGranted ? AppColors.safeGreen : AppColors.medium,
+                      size: 20,
+                    ),
+                  ),
+                ),
                 const SizedBox(height: 32),
                 SizedBox(
                   width: double.infinity,
                   height: 56,
                   child: ElevatedButton(
-                    onPressed: _isRequesting ? null : (_allGranted ? _navigateToApp : _requestAllPermissions),
+                    onPressed: _isRequesting ? null : (_locationGranted ? _navigateToApp : _requestLocation),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: _allGranted ? AppColors.safeGreen : AppColors.deepBlue,
+                      backgroundColor: _locationGranted ? AppColors.safeGreen : AppColors.deepBlue,
                     ),
                     child: _isRequesting
                         ? const SizedBox(
@@ -162,44 +173,19 @@ class _PermissionScreenState extends State<PermissionScreen> {
                             child: CircularProgressIndicator(color: AppColors.white, strokeWidth: 2),
                           )
                         : Text(
-                            _allGranted ? 'Continue' : 'Grant All Permissions',
-                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                            _locationGranted ? 'Continue' : 'Enable Location',
+                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
                           ),
                   ),
                 ),
-                if (_allGranted) ...[
-                  const SizedBox(height: 12),
-                  TextButton(
-                    onPressed: _navigateToApp,
-                    child: const Text('Skip for now', style: TextStyle(color: AppColors.medium)),
-                  ),
-                ],
+                const SizedBox(height: 12),
+                TextButton(
+                  onPressed: _navigateToApp,
+                  child: const Text('Skip for now', style: TextStyle(color: AppColors.medium)),
+                ),
               ],
             ),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPermissionTile(IconData icon, String title, String subtitle, bool granted) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: ListTile(
-        leading: Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: granted ? AppColors.safeGreen.withOpacity(0.1) : AppColors.alertOrange.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(icon, color: granted ? AppColors.safeGreen : AppColors.alertOrange, size: 24),
-        ),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-        subtitle: Text(subtitle, style: const TextStyle(fontSize: 12, color: AppColors.medium)),
-        trailing: Icon(
-          granted ? Icons.check_circle : Icons.arrow_forward_ios,
-          color: granted ? AppColors.safeGreen : AppColors.medium,
-          size: 20,
         ),
       ),
     );

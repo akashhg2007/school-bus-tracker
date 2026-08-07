@@ -36,73 +36,32 @@ void main() async {
     ),
   );
 
-  runApp(const SplashScreen());
+  ApiService().init();
+  await AuthService().init();
+  unawaited(FirebaseService().initPush());
+
+  runApp(const MyApp());
 }
 
-class SplashScreen extends StatefulWidget {
-  const SplashScreen({super.key});
+class MyApp extends StatefulWidget {
+  const MyApp({super.key});
 
   @override
-  State<SplashScreen> createState() => _SplashScreenState();
+  State<MyApp> createState() => _MyAppState();
 }
 
-class _SplashScreenState extends State<SplashScreen> {
+class _MyAppState extends State<MyApp> {
+  bool _showSplash = true;
+
   @override
   void initState() {
     super.initState();
-    _initialize();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted) setState(() => _showSplash = false);
+      });
+    });
   }
-
-  Future<void> _initialize() async {
-    ApiService().init();
-
-    await AuthService().init();
-    unawaited(FirebaseService().initPush());
-
-    if (mounted) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const MyApp()),
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme,
-      home: Scaffold(
-        backgroundColor: AppColors.pageBg,
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 100,
-                height: 100,
-                decoration: BoxDecoration(
-                  color: AppColors.deepBlue,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: const Icon(Icons.directions_bus, size: 60, color: AppColors.white),
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                'School Bus Tracker',
-                style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: AppColors.deepBlue),
-              ),
-              const SizedBox(height: 24),
-              const CircularProgressIndicator(),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -110,7 +69,41 @@ class MyApp extends StatelessWidget {
       title: 'School Bus Tracker',
       theme: AppTheme.lightTheme,
       debugShowCheckedModeBanner: false,
-      home: const PermissionScreen(),
+      home: _showSplash ? const SplashWidget() : const PermissionScreen(),
+    );
+  }
+}
+
+class SplashWidget extends StatelessWidget {
+  const SplashWidget({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.pageBg,
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 100,
+              height: 100,
+              decoration: BoxDecoration(
+                color: AppColors.deepBlue,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Icon(Icons.directions_bus, size: 60, color: AppColors.white),
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'School Bus Tracker',
+              style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: AppColors.deepBlue),
+            ),
+            const SizedBox(height: 24),
+            const CircularProgressIndicator(),
+          ],
+        ),
+      ),
     );
   }
 }
