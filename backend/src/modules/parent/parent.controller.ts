@@ -5,9 +5,9 @@ import { sendSuccess } from '../../utils/response';
 export const createParent = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const schoolId = req.user!.schoolId;
-    const { name, phone, email } = req.body;
+    const { name, phone, email, password } = req.body;
 
-    const parent = await parentService.createParent({ name, phone, email, schoolId });
+    const parent = await parentService.createParent({ name, phone, email, password, schoolId });
     sendSuccess(res, 'Parent created successfully', parent, 201);
   } catch (error) {
     next(error);
@@ -44,9 +44,9 @@ export const getParentById = async (req: Request, res: Response, next: NextFunct
 export const updateParent = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { id } = req.params;
-    const { name, phone, email } = req.body;
+    const { name, phone, email, password } = req.body;
 
-    const parent = await parentService.updateParent(id, { name, phone, email }, req.user!.schoolId);
+    const parent = await parentService.updateParent(id, { name, phone, email, password }, req.user!.schoolId);
     sendSuccess(res, 'Parent updated successfully', parent);
   } catch (error) {
     next(error);

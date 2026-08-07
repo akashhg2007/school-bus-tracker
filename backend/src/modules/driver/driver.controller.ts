@@ -4,7 +4,7 @@ import { sendSuccess } from '../../utils/response';
 
 export const createDriver = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { name, phone, licenseNumber, email } = req.body;
+    const { name, phone, licenseNumber, email, password } = req.body;
     const schoolId = req.user!.schoolId;
 
     const driver = await driverService.createDriver({
@@ -12,6 +12,7 @@ export const createDriver = async (req: Request, res: Response, next: NextFuncti
       phone,
       licenseNumber,
       email,
+      password,
       schoolId,
     });
 
