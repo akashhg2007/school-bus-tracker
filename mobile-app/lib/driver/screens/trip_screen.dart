@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:dio/dio.dart';
 import '../../core/config/theme.dart';
 import '../../core/config/app_config.dart';
 import '../../core/services/api_service.dart';
@@ -189,12 +190,25 @@ class _TripScreenState extends State<TripScreen> {
         _socketService.joinBusRoom(widget.busId!);
       }
     } catch (e) {
+      final message = _extractError(e);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to start trip: $e')),
+          const SnackBar(content: Text('Failed to start trip')),
+        );
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message)),
         );
       }
     }
+  }
+
+  String _extractError(Object e) {
+    if (e is DioException) {
+      final data = e.response?.data;
+      final serverMsg = data is Map<String, dynamic> ? data['message'] : null;
+      if (serverMsg is String && serverMsg.isNotEmpty) return serverMsg;
+    }
+    return e.toString();
   }
 
   Future<void> _endTrip() async {
@@ -213,7 +227,7 @@ class _TripScreenState extends State<TripScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to end trip: $e')),
+          SnackBar(content: Text('Failed to end trip: ${_extractError(e)}')),
         );
       }
     }
