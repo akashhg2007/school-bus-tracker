@@ -162,10 +162,12 @@ export const handleJoinRooms = (socket: Socket) => {
 };
 
 export const handleLeaveRooms = (socket: Socket) => {
-  socket.on('leave:bus', (busId: string) => {
+  socket.on('leave:bus', async (busId: string) => {
     const user = getUser(socket);
     if (!user) return;
-    socket.leave(`bus:${busId}`);
+    if (await canJoinBus(socket, busId)) {
+      socket.leave(`bus:${busId}`);
+    }
   });
 
   socket.on('leave:school', (schoolId: string) => {

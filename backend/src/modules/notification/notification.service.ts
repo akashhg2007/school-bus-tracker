@@ -1,6 +1,7 @@
 import prisma from '../../config/database';
 import { emitToRoom } from '../../socket';
-import { NotFoundError } from '../../utils/errors';
+import { NotFoundError, BadRequestError } from '../../utils/errors';
+import { sanitizePagination } from '../../utils/pagination';
 import { sendPush, getFcmToken } from './fcm.service';
 
 interface SendNotificationInput {
@@ -71,12 +72,17 @@ export const sendNotification = async (data: SendNotificationInput, schoolId?: s
   return notification;
 };
 
+const MAX_BULK_RECIPIENTS = 1000;
+
 export const sendBulkNotification = async (
   userIds: Array<{ userId: string; userType: 'PARENT' | 'DRIVER' | 'ADMIN' }>,
   title: string,
   body: string,
   data?: Record<string, any>
 ) => {
+  if (userIds.length > MAX_BULK_RECIPIENTS) {
+    throw new BadRequestError(`Cannot send to more than ${MAX_BULK_RECIPIENTS} recipients at once`);
+  }
   const jsonData = data ? JSON.stringify(data) : null;
   const notifications = await prisma.notification.createMany({
     data: userIds.map((user) => ({
@@ -131,13 +137,14 @@ export const sendSchoolNotification = async (schoolId: string, title: string, bo
 };
 
 export const getUserNotifications = async (userId: string, userType: string, page: number = 1, limit: number = 20) => {
-  const skip = (page - 1) * limit;
+  const { page: p, limit: l } = sanitizePagination(page, limit);
+  const skip = (p - 1) * l;
 
   const [notifications, total] = await Promise.all([
     prisma.notification.findMany({
       where: { userId, userType: userType as any },
       skip,
-      take: limit,
+      take: l,
       orderBy: { createdAt: 'desc' },
     }),
     prisma.notification.count({
@@ -145,7 +152,7 @@ export const getUserNotifications = async (userId: string, userType: string, pag
     }),
   ]);
 
-  return { notifications, total, page, limit };
+  return { notifications, total, page: p, limit: l };
 };
 
 export const markAsRead = async (notificationId: string, userId?: string, userType?: string) => {

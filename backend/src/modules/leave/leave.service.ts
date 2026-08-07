@@ -1,5 +1,6 @@
 import prisma from '../../config/database';
 import { NotFoundError, BadRequestError } from '../../utils/errors';
+import { sanitizePagination } from '../../utils/pagination';
 
 interface CreateLeaveInput {
   studentId: string;
@@ -59,7 +60,8 @@ export const getParentLeaveRequests = async (parentId: string) => {
 };
 
 export const getSchoolLeaveRequests = async (schoolId: string, page: number = 1, limit: number = 20) => {
-  const skip = (page - 1) * limit;
+  const { page: p, limit: l } = sanitizePagination(page, limit);
+  const skip = (p - 1) * l;
   const where = {
     student: { parent: { schoolId } },
   };
@@ -73,12 +75,12 @@ export const getSchoolLeaveRequests = async (schoolId: string, page: number = 1,
       },
       orderBy: { createdAt: 'desc' },
       skip,
-      take: limit,
+      take: l,
     }),
     prisma.leaveRequest.count({ where }),
   ]);
 
-  return { leaves, total, page, limit };
+  return { leaves, total, page: p, limit: l };
 };
 
 export const updateLeaveStatus = async (leaveId: string, status: string) => {

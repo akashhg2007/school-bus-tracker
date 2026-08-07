@@ -27,13 +27,10 @@ const getJwtSecret = (): string => {
     return secret;
   }
 
-  const isProduction = process.env.NODE_ENV === 'production';
-  if (isProduction) {
-    throw new Error('JWT_SECRET environment variable must be set to a secure value (min 32 chars) in production');
-  }
-  console.warn('WARNING: Using insecure default JWT secret. Set JWT_SECRET in production.');
-  cachedJwtSecret = 'dev-only-change-this-to-at-least-32-chars!';
-  return cachedJwtSecret;
+  throw new Error(
+    'JWT_SECRET environment variable must be set to a secure value (min 32 chars). ' +
+    'Generate one with: node -e "console.log(require(\'crypto\').randomBytes(48).toString(\'base64\'))"'
+  );
 };
 
 const revokedTokens = new Map<string, number>();
@@ -115,6 +112,10 @@ export const verifyToken = (token: string): AuthPayload => {
 
 export const refreshToken = (token: string): string => {
   const decoded = jwt.verify(token, getJwtSecret(), { algorithms: [JWT_ALGORITHM] }) as AuthPayload & { exp?: number; iat?: number };
+  const now = Math.floor(Date.now() / 1000);
+  if (decoded.exp && decoded.exp - now > 3600) {
+    throw new UnauthorizedError('Token can only be refreshed within 1 hour of expiry');
+  }
   revokeToken(token);
   const { exp, iat, ...payload } = decoded;
   const newToken = generateToken(payload);

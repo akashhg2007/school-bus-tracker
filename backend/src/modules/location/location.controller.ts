@@ -33,7 +33,7 @@ export const getBusLocation = async (req: Request, res: Response, next: NextFunc
 export const getTripLocationHistory = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { tripId } = req.params;
-    const locations = await locationService.getTripLocationHistory(tripId);
+    const locations = await locationService.getTripLocationHistory(tripId, 1, 100, req.user?.schoolId);
     sendSuccess(res, 'Trip location history retrieved successfully', locations);
   } catch (error) {
     next(error);

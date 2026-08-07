@@ -22,8 +22,9 @@ export const startTrip = async (req: Request, res: Response, next: NextFunction)
 export const endTrip = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { id } = req.params;
+    const driverId = req.user!.userId;
 
-    const trip = await tripService.endTrip(id);
+    const trip = await tripService.endTrip(id, driverId);
     sendSuccess(res, 'Trip ended successfully', trip);
   } catch (error) {
     next(error);

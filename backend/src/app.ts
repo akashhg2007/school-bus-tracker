@@ -3,6 +3,8 @@ import dotenv from 'dotenv';
 import http from 'http';
 import fs from 'fs';
 import path from 'path';
+import { logger } from './utils/logger';
+import { auditLog } from './middleware/audit';
 import { initializeFirebase } from './config/firebase';
 import { initializeSocket } from './socket';
 import { AppError } from './utils/errors';
@@ -40,7 +42,7 @@ app.use(securityHeaders);
 app.use(corsOptions);
 app.use(cacheHeaders);
 app.use(express.json({ limit: '1mb' }));
-app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+app.use(express.urlencoded({ extended: false, limit: '1mb' }));
 
 // Rate limiting
 app.use('/api/auth', authLimiter);
@@ -59,6 +61,9 @@ app.get('/health', async (_req, res) => {
   }
   res.json(checks);
 });
+
+// Audit logging for sensitive operations
+app.use('/api', auditLog);
 
 // API Routes
 app.use('/api/auth', authRoutes);
@@ -82,7 +87,7 @@ if (fs.existsSync(clientDist)) {
   app.get(/^\/(?!api\/|health).*/, (_req, res) => {
     res.sendFile(path.join(clientDist, 'index.html'));
   });
-  console.log(`Serving admin dashboard from ${clientDist}`);
+  logger.info(`Serving admin dashboard from ${clientDist}`);
 }
 
 // 404 handler
@@ -90,18 +95,24 @@ app.use((_req, res) => {
   res.status(404).json({
     success: false,
     message: 'Route not found',
-    error: 'NOT_FOUND',
   });
 });
 
 // Global error handler
-app.use((err: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+app.use((err: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
   const requestId = (req as any).headers?.['x-request-id'] || 'unknown';
 
+  if (err.type === 'entity.too.large') {
+    res.status(413).json({
+      success: false,
+      message: 'Request payload too large',
+      requestId,
+    });
+    return;
+  }
+
   if (err instanceof AppError) {
-    if (process.env.NODE_ENV !== 'production') {
-      console.error(`[${requestId}] Error ${err.statusCode}:`, err.message);
-    }
+    console.error(`[${requestId}] Error ${err.statusCode}: ${err.message}`);
     res.status(err.statusCode).json({
       success: false,
       message: err.message,
@@ -110,11 +121,7 @@ app.use((err: Error, req: express.Request, res: express.Response, _next: express
     return;
   }
 
-  if (process.env.NODE_ENV !== 'production') {
-    console.error(`[${requestId}] Unhandled error:`, err.message, err.stack);
-  } else {
-    console.error(`[${requestId}] Unhandled error:`, err.message);
-  }
+  console.error(`[${requestId}] Unhandled error: ${err.message}`);
 
   res.status(500).json({
     success: false,
@@ -130,12 +137,12 @@ const httpServer = http.createServer(app);
 if (process.env.FIREBASE_SERVICE_ACCOUNT) {
   try {
     initializeFirebase();
-    console.log('Firebase configured - FCM will initialize on first push');
+    logger.info('Firebase configured - FCM will initialize on first push');
   } catch (error) {
-    console.warn('Firebase initialization skipped (configure in .env)');
+    logger.warn('Firebase initialization skipped (configure in .env)');
   }
 } else {
-  console.log('Firebase not configured - running in dev mode');
+  logger.info('Firebase not configured - running in dev mode');
 }
 
 // Initialize Socket.IO
@@ -143,12 +150,12 @@ initializeSocket(httpServer);
 
 // Start server
 const server = httpServer.listen(Number(PORT), '0.0.0.0', () => {
-  console.log(`Server running on http://0.0.0.0:${PORT}`);
-  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+  logger.info(`Server running on http://0.0.0.0:${PORT}`);
+  logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
 
 const shutdown = (signal: string) => {
-  console.log(`${signal} received, shutting down gracefully...`);
+  logger.info(`${signal} received, shutting down gracefully...`);
   server.close(async () => {
     try {
       await prisma.$disconnect();

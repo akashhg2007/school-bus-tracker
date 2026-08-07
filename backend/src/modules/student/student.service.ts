@@ -1,5 +1,6 @@
 import prisma from '../../config/database';
 import { NotFoundError, ConflictError, BadRequestError } from '../../utils/errors';
+import { sanitizePagination } from '../../utils/pagination';
 
 interface CreateStudentInput {
   name: string;
@@ -116,7 +117,8 @@ export const createStudent = async (data: CreateStudentInput, schoolId?: string)
 };
 
 export const getStudentsBySchool = async (schoolId: string, page: number = 1, limit: number = 10) => {
-  const skip = (page - 1) * limit;
+  const { page: p, limit: l } = sanitizePagination(page, limit);
+  const skip = (p - 1) * l;
 
   const [students, total] = await Promise.all([
     prisma.student.findMany({
@@ -135,7 +137,7 @@ export const getStudentsBySchool = async (schoolId: string, page: number = 1, li
         },
       },
       skip,
-      take: limit,
+      take: l,
       orderBy: { createdAt: 'desc' },
     }),
     prisma.student.count({
@@ -145,7 +147,7 @@ export const getStudentsBySchool = async (schoolId: string, page: number = 1, li
     }),
   ]);
 
-  return { students, total, page, limit };
+  return { students, total, page: p, limit: l };
 };
 
 export const getStudentById = async (studentId: string, scope?: StudentScope) => {

@@ -70,10 +70,10 @@ const updateBusValidation = [
 
 // Routes
 router.get('/', authenticate, authorize('ADMIN'), busController.getBuses);
-router.get('/:id', authenticate, busController.getBusById);
+router.get('/:id', authenticate, authorize('ADMIN', 'PARENT', 'DRIVER'), busController.getBusById);
 router.post('/', authenticate, authorize('ADMIN'), validate(createBusValidation), busController.createBus);
 router.put('/:id', authenticate, authorize('ADMIN'), validate(updateBusValidation), busController.updateBus);
 router.delete('/:id', authenticate, authorize('ADMIN'), busController.deleteBus);
-router.get('/:id/live-location', authenticate, busController.getBusLiveLocation);
+router.get('/:id/live-location', authenticate, authorize('ADMIN', 'PARENT', 'DRIVER'), busController.getBusLiveLocation);
 
 export default router;

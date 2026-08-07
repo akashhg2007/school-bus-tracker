@@ -3,11 +3,9 @@ import { generateToken, AuthPayload } from '../../middleware/auth';
 import { NotFoundError, UnauthorizedError, ConflictError, BadRequestError } from '../../utils/errors';
 import { hashPassword, comparePassword } from '../../utils/password';
 import crypto from 'crypto';
-import timingSafeEqual from 'crypto';
 
 interface SendOtpResult {
   sessionInfo: string;
-  devOtp?: string;
 }
 
 interface VerifyOtpResult {
@@ -72,7 +70,6 @@ setInterval(() => {
 }, 10 * 60 * 1000);
 
 const constantTimeCompare = (a: string, b: string): boolean => {
-  if (a.length !== b.length) return false;
   const bufA = Buffer.from(a.padEnd(64, '\0'));
   const bufB = Buffer.from(b.padEnd(64, '\0'));
   return crypto.timingSafeEqual(bufA, bufB);
@@ -109,10 +106,6 @@ export const sendOtp = async (phone: string): Promise<SendOtpResult> => {
 
   const code = String(crypto.randomInt(100000, 999999));
   otpStore.set(phone, { code, expiresAt: Date.now() + OTP_TTL_MS, attempts: 0 });
-
-  if (!isProduction()) {
-    return { sessionInfo: 'otp-' + Date.now(), devOtp: code };
-  }
 
   return { sessionInfo: 'otp-' + Date.now() };
 };
@@ -237,112 +230,53 @@ export const loginWithPassword = async (
     isActive: 1,
   };
 
-  const parent = await prisma.parent.findFirst({
-    where: whereClause,
-    include: { school: true },
-  });
+  const [parent, driver, admin] = await Promise.all([
+    prisma.parent.findFirst({ where: whereClause, include: { school: true } }),
+    prisma.driver.findFirst({ where: whereClause, include: { school: true } }),
+    prisma.admin.findFirst({ where: whereClause, include: { school: true } }),
+  ]);
 
-  if (parent) {
-    if (!parent.password) {
-      throw new UnauthorizedError('Account not activated. Please use the activation link sent to your email.');
-    }
-    const valid = await comparePassword(password, parent.password);
-    if (!valid) {
-      recordFailedLogin(identifier);
-      throw new UnauthorizedError('Invalid credentials');
-    }
-    loginAttempts.delete(identifier);
-    const payload: AuthPayload = {
-      userId: parent.id,
-      userType: 'PARENT',
-      schoolId: parent.schoolId,
-    };
-    const token = generateToken(payload);
-    return {
-      token,
-      user: {
-        id: parent.id,
-        name: parent.name,
-        phone: parent.phone,
-        email: parent.email,
-        userType: 'PARENT',
-        schoolId: parent.schoolId,
-        schoolName: parent.school?.name,
-      },
-    };
+  const user = parent || driver || admin;
+  if (!user) {
+    throw new NotFoundError('No account found with this email or phone number');
   }
 
-  const driver = await prisma.driver.findFirst({
-    where: whereClause,
-    include: { school: true },
-  });
-
-  if (driver) {
-    if (!driver.password) {
-      throw new UnauthorizedError('Account not activated. Please use the activation link sent to your email.');
-    }
-    const valid = await comparePassword(password, driver.password);
-    if (!valid) {
-      recordFailedLogin(identifier);
-      throw new UnauthorizedError('Invalid credentials');
-    }
-    loginAttempts.delete(identifier);
-    const payload: AuthPayload = {
-      userId: driver.id,
-      userType: 'DRIVER',
-      schoolId: driver.schoolId,
-    };
-    const token = generateToken(payload);
-    return {
-      token,
-      user: {
-        id: driver.id,
-        name: driver.name,
-        phone: driver.phone,
-        email: driver.email,
-        userType: 'DRIVER',
-        schoolId: driver.schoolId,
-        schoolName: driver.school?.name,
-      },
-    };
+  if (!user.password) {
+    throw new UnauthorizedError('Account not activated. Please use the activation link sent to your email.');
   }
 
-  const admin = await prisma.admin.findFirst({
-    where: whereClause,
-    include: { school: true },
-  });
-
-  if (admin) {
-    if (!admin.password) {
-      throw new UnauthorizedError('Account not activated. Please use the activation link sent to your email.');
-    }
-    const valid = await comparePassword(password, admin.password);
-    if (!valid) {
-      recordFailedLogin(identifier);
-      throw new UnauthorizedError('Invalid credentials');
-    }
-    loginAttempts.delete(identifier);
-    const payload: AuthPayload = {
-      userId: admin.id,
-      userType: 'ADMIN',
-      schoolId: admin.schoolId,
-    };
-    const token = generateToken(payload);
-    return {
-      token,
-      user: {
-        id: admin.id,
-        name: admin.name,
-        phone: admin.phone,
-        email: admin.email,
-        userType: 'ADMIN',
-        schoolId: admin.schoolId,
-        schoolName: admin.school?.name,
-      },
-    };
+  const valid = await comparePassword(password, user.password);
+  if (!valid) {
+    recordFailedLogin(identifier);
+    throw new UnauthorizedError('Invalid credentials');
   }
 
-  throw new NotFoundError('No account found with this email or phone number');
+  loginAttempts.delete(identifier);
+
+  let userType: 'PARENT' | 'DRIVER' | 'ADMIN';
+  if (parent) userType = 'PARENT';
+  else if (driver) userType = 'DRIVER';
+  else userType = 'ADMIN';
+
+  const payload: AuthPayload = {
+    userId: user.id,
+    userType,
+    schoolId: user.schoolId,
+  };
+  const token = generateToken(payload);
+
+  return {
+    token,
+    user: {
+      id: user.id,
+      name: user.name,
+      phone: user.phone,
+      email: user.email,
+      userType,
+      schoolId: user.schoolId,
+      schoolName: (user as any).school?.name,
+    },
+  };
 };
 
 // ==================== ACTIVATION ====================
@@ -513,29 +447,30 @@ export const registerUser = async (
 
 export const setupPassword = async (
   phone: string,
-  newPassword: string
+  newPassword: string,
+  adminSchoolId: string
 ): Promise<{ message: string; userType: string }> => {
   const hashedPassword = await hashPassword(newPassword);
 
   const parent = await prisma.parent.findUnique({ where: { phone } });
-  if (parent) {
+  if (parent && parent.schoolId === adminSchoolId) {
     await prisma.parent.update({ where: { id: parent.id }, data: { password: hashedPassword } });
     return { message: 'Password set for parent', userType: 'PARENT' };
   }
 
   const driver = await prisma.driver.findUnique({ where: { phone } });
-  if (driver) {
+  if (driver && driver.schoolId === adminSchoolId) {
     await prisma.driver.update({ where: { id: driver.id }, data: { password: hashedPassword } });
     return { message: 'Password set for driver', userType: 'DRIVER' };
   }
 
   const admin = await prisma.admin.findUnique({ where: { phone } });
-  if (admin) {
+  if (admin && admin.schoolId === adminSchoolId) {
     await prisma.admin.update({ where: { id: admin.id }, data: { password: hashedPassword } });
     return { message: 'Password set for admin', userType: 'ADMIN' };
   }
 
-  throw new NotFoundError('No user found with this phone number');
+  throw new NotFoundError('No user found with this phone number in your school');
 };
 
 export const updateFcmToken = async (userId: string, userType: string, fcmToken: string): Promise<void> => {

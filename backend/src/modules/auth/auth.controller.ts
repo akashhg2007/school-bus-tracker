@@ -98,7 +98,8 @@ export const logout = async (req: Request, res: Response, next: NextFunction): P
 export const setupPassword = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { phone, password } = req.body;
-    const result = await authService.setupPassword(phone, password);
+    const schoolId = req.user!.schoolId;
+    const result = await authService.setupPassword(phone, password, schoolId);
     sendSuccess(res, result.message, { userType: result.userType });
   } catch (error) {
     next(error);

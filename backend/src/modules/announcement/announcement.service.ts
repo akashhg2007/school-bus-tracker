@@ -1,5 +1,6 @@
 import prisma from '../../config/database';
 import { NotFoundError, BadRequestError } from '../../utils/errors';
+import { sanitizePagination } from '../../utils/pagination';
 
 interface CreateAnnouncementInput {
   schoolId: string;
@@ -22,19 +23,20 @@ export const createAnnouncement = async (data: CreateAnnouncementInput) => {
 };
 
 export const getSchoolAnnouncements = async (schoolId: string, page: number = 1, limit: number = 20) => {
-  const skip = (page - 1) * limit;
+  const { page: p, limit: l } = sanitizePagination(page, limit);
+  const skip = (p - 1) * l;
 
   const [announcements, total] = await Promise.all([
     prisma.announcement.findMany({
       where: { schoolId },
       orderBy: { createdAt: 'desc' },
       skip,
-      take: limit,
+      take: l,
     }),
     prisma.announcement.count({ where: { schoolId } }),
   ]);
 
-  return { announcements, total, page, limit };
+  return { announcements, total, page: p, limit: l };
 };
 
 export const deleteAnnouncement = async (announcementId: string, schoolId: string) => {

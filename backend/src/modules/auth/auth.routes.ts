@@ -34,12 +34,14 @@ const verifyOtpValidation = [
 const loginValidation = [
   body('identifier')
     .notEmpty()
-    .withMessage('Email or phone number is required'),
+    .withMessage('Email or phone number is required')
+    .isLength({ max: 254 })
+    .withMessage('Identifier too long'),
   body('password')
     .notEmpty()
     .withMessage('Password is required')
-    .isLength({ min: 8 })
-    .withMessage('Password must be at least 8 characters'),
+    .isLength({ min: 8, max: 128 })
+    .withMessage('Password must be 8-128 characters'),
 ];
 
 const registerValidation = [

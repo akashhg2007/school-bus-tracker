@@ -1,4 +1,5 @@
 import * as admin from 'firebase-admin';
+import { logger } from '../utils/logger';
 
 let firebaseApp: admin.app.App;
 
@@ -35,7 +36,7 @@ export const initializeFirebase = (): admin.app.App => {
     credential: admin.credential.cert(serviceAccount as admin.ServiceAccount),
   });
 
-  console.log('Firebase initialized successfully');
+  logger.info('Firebase initialized successfully');
   return firebaseApp;
 };
 

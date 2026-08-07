@@ -1,6 +1,7 @@
 import prisma from '../../config/database';
 import { NotFoundError, ConflictError } from '../../utils/errors';
 import { hashPassword } from '../../utils/password';
+import { sanitizePagination } from '../../utils/pagination';
 
 interface CreateParentInput {
   name: string;
@@ -50,7 +51,8 @@ export const createParent = async (data: CreateParentInput) => {
 };
 
 export const getParentsBySchool = async (schoolId: string, page: number = 1, limit: number = 20) => {
-  const skip = (page - 1) * limit;
+  const { page: p, limit: l } = sanitizePagination(page, limit);
+  const skip = (p - 1) * l;
 
   const [parents, total] = await Promise.all([
     prisma.parent.findMany({
@@ -70,16 +72,16 @@ export const getParentsBySchool = async (schoolId: string, page: number = 1, lim
         },
       },
       skip,
-      take: limit,
+      take: l,
       orderBy: { createdAt: 'desc' },
     }),
     prisma.parent.count({ where: { schoolId, isActive: 1 } }),
   ]);
 
-  return { parents, total, page, limit };
+  return { parents, total, page: p, limit: l };
 };
 
-export const getParentById = async (parentId: string) => {
+export const getParentById = async (parentId: string, schoolId?: string) => {
   const parent = await prisma.parent.findUnique({
     where: { id: parentId },
     select: {
@@ -100,6 +102,9 @@ export const getParentById = async (parentId: string) => {
   if (!parent) {
     throw new NotFoundError('Parent not found');
   }
+  if (schoolId && parent.schoolId !== schoolId) {
+    throw new NotFoundError('Parent not found');
+  }
   return parent;
 };
 
@@ -113,7 +118,7 @@ export const updateParent = async (
     throw new NotFoundError('Parent not found');
   }
 
-  if (schoolId && parent.schoolId !== schoolId) {
+  if (!schoolId || parent.schoolId !== schoolId) {
     throw new NotFoundError('Parent not found');
   }
 
@@ -155,7 +160,7 @@ export const deleteParent = async (parentId: string, schoolId?: string) => {
     throw new NotFoundError('Parent not found');
   }
 
-  if (schoolId && parent.schoolId !== schoolId) {
+  if (!schoolId || parent.schoolId !== schoolId) {
     throw new NotFoundError('Parent not found');
   }
 

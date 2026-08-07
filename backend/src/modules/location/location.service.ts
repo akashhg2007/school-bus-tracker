@@ -1,5 +1,6 @@
 import prisma from '../../config/database';
 import { NotFoundError, BadRequestError } from '../../utils/errors';
+import { sanitizePagination } from '../../utils/pagination';
 import { emitToRoom } from '../../socket';
 import { calculateDistance, calculateETA, findNearestStop } from '../../utils/distance';
 import { sendNotification } from '../notification/notification.service';
@@ -243,27 +244,33 @@ export const getBusLocation = async (busId: string, schoolId?: string) => {
   return bus.trips[0].gpsLocations[0];
 };
 
-export const getTripLocationHistory = async (tripId: string, page: number = 1, limit: number = 100) => {
+export const getTripLocationHistory = async (tripId: string, page: number = 1, limit: number = 100, schoolId?: string) => {
   const trip = await prisma.trip.findUnique({
     where: { id: tripId },
+    include: { bus: { select: { schoolId: true } } },
   });
 
   if (!trip) {
     throw new NotFoundError('Trip not found');
   }
 
-  const skip = (page - 1) * limit;
+  if (schoolId && trip.bus.schoolId !== schoolId) {
+    throw new NotFoundError('Trip not found');
+  }
+
+  const { page: p, limit: l } = sanitizePagination(page, limit);
+  const skip = (p - 1) * l;
   const [locations, total] = await Promise.all([
     prisma.gpsLocation.findMany({
       where: { tripId },
       orderBy: { createdAt: 'asc' },
       skip,
-      take: limit,
+      take: l,
     }),
     prisma.gpsLocation.count({ where: { tripId } }),
   ]);
 
-  return { locations, total, page, limit };
+  return { locations, total, page: p, limit: l };
 };
 
 export const getFleetLocations = async (schoolId: string) => {

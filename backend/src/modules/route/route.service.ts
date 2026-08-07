@@ -1,5 +1,6 @@
 import prisma from '../../config/database';
 import { NotFoundError, ConflictError } from '../../utils/errors';
+import { sanitizePagination } from '../../utils/pagination';
 
 interface CreateRouteInput {
   name: string;
@@ -66,7 +67,8 @@ export const createRoute = async (data: CreateRouteInput) => {
 };
 
 export const getRoutesBySchool = async (schoolId: string, page: number = 1, limit: number = 10) => {
-  const skip = (page - 1) * limit;
+  const { page: p, limit: l } = sanitizePagination(page, limit);
+  const skip = (p - 1) * l;
 
   const [routes, total] = await Promise.all([
     prisma.route.findMany({
@@ -78,13 +80,13 @@ export const getRoutesBySchool = async (schoolId: string, page: number = 1, limi
         _count: { select: { buses: true } },
       },
       skip,
-      take: limit,
+      take: l,
       orderBy: { createdAt: 'desc' },
     }),
     prisma.route.count({ where: { schoolId } }),
   ]);
 
-  return { routes, total, page, limit };
+  return { routes, total, page: p, limit: l };
 };
 
 export const getRouteById = async (routeId: string, schoolId?: string) => {
@@ -117,12 +119,16 @@ export const getRouteById = async (routeId: string, schoolId?: string) => {
   return route;
 };
 
-export const updateRoute = async (routeId: string, data: UpdateRouteInput) => {
+export const updateRoute = async (routeId: string, data: UpdateRouteInput, schoolId?: string) => {
   const route = await prisma.route.findUnique({
     where: { id: routeId },
   });
 
   if (!route) {
+    throw new NotFoundError('Route not found');
+  }
+
+  if (schoolId && route.schoolId !== schoolId) {
     throw new NotFoundError('Route not found');
   }
 
@@ -153,7 +159,7 @@ export const updateRoute = async (routeId: string, data: UpdateRouteInput) => {
   return updatedRoute;
 };
 
-export const deleteRoute = async (routeId: string) => {
+export const deleteRoute = async (routeId: string, schoolId?: string) => {
   const route = await prisma.route.findUnique({
     where: { id: routeId },
     include: {
@@ -162,6 +168,10 @@ export const deleteRoute = async (routeId: string) => {
   });
 
   if (!route) {
+    throw new NotFoundError('Route not found');
+  }
+
+  if (schoolId && route.schoolId !== schoolId) {
     throw new NotFoundError('Route not found');
   }
 
@@ -176,7 +186,7 @@ export const deleteRoute = async (routeId: string) => {
   return { message: 'Route deleted successfully' };
 };
 
-export const addStop = async (routeId: string, data: CreateStopInput) => {
+export const addStop = async (routeId: string, data: CreateStopInput, schoolId?: string) => {
   const route = await prisma.route.findUnique({
     where: { id: routeId },
     include: {
@@ -188,6 +198,10 @@ export const addStop = async (routeId: string, data: CreateStopInput) => {
   });
 
   if (!route) {
+    throw new NotFoundError('Route not found');
+  }
+
+  if (schoolId && route.schoolId !== schoolId) {
     throw new NotFoundError('Route not found');
   }
 
@@ -206,12 +220,17 @@ export const addStop = async (routeId: string, data: CreateStopInput) => {
   return stop;
 };
 
-export const updateStop = async (stopId: string, data: UpdateStopInput) => {
+export const updateStop = async (stopId: string, data: UpdateStopInput, schoolId?: string) => {
   const stop = await prisma.stop.findUnique({
     where: { id: stopId },
+    include: { route: { select: { schoolId: true } } },
   });
 
   if (!stop) {
+    throw new NotFoundError('Stop not found');
+  }
+
+  if (schoolId && stop.route.schoolId !== schoolId) {
     throw new NotFoundError('Stop not found');
   }
 
@@ -260,15 +279,20 @@ export const updateStop = async (stopId: string, data: UpdateStopInput) => {
   return updatedStop;
 };
 
-export const deleteStop = async (stopId: string) => {
+export const deleteStop = async (stopId: string, schoolId?: string) => {
   const stop = await prisma.stop.findUnique({
     where: { id: stopId },
     include: {
       _count: { select: { students: true } },
+      route: { select: { schoolId: true } },
     },
   });
 
   if (!stop) {
+    throw new NotFoundError('Stop not found');
+  }
+
+  if (schoolId && stop.route.schoolId !== schoolId) {
     throw new NotFoundError('Stop not found');
   }
 

@@ -1,6 +1,7 @@
 import prisma from '../../config/database';
 import { NotFoundError, ConflictError } from '../../utils/errors';
 import { hashPassword } from '../../utils/password';
+import { sanitizePagination } from '../../utils/pagination';
 
 interface CreateDriverInput {
   name: string;
@@ -65,7 +66,8 @@ export const createDriver = async (data: CreateDriverInput) => {
 };
 
 export const getDriversBySchool = async (schoolId: string, page: number = 1, limit: number = 10) => {
-  const skip = (page - 1) * limit;
+  const { page: p, limit: l } = sanitizePagination(page, limit);
+  const skip = (p - 1) * l;
 
   const [drivers, total] = await Promise.all([
     prisma.driver.findMany({
@@ -86,13 +88,13 @@ export const getDriversBySchool = async (schoolId: string, page: number = 1, lim
         _count: { select: { trips: true } },
       },
       skip,
-      take: limit,
+      take: l,
       orderBy: { createdAt: 'desc' },
     }),
     prisma.driver.count({ where: { schoolId, isActive: 1 } }),
   ]);
 
-  return { drivers, total, page, limit };
+  return { drivers, total, page: p, limit: l };
 };
 
 export const getDriverById = async (driverId: string, schoolId?: string) => {
@@ -145,7 +147,7 @@ export const updateDriver = async (
     throw new NotFoundError('Driver not found');
   }
 
-  if (schoolId && driver.schoolId !== schoolId) {
+  if (!schoolId || driver.schoolId !== schoolId) {
     throw new NotFoundError('Driver not found');
   }
 
@@ -206,7 +208,7 @@ export const deleteDriver = async (driverId: string, schoolId?: string) => {
     throw new NotFoundError('Driver not found');
   }
 
-  if (schoolId && driver.schoolId !== schoolId) {
+  if (!schoolId || driver.schoolId !== schoolId) {
     throw new NotFoundError('Driver not found');
   }
 

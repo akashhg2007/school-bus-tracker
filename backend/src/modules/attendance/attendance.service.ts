@@ -1,5 +1,6 @@
 import prisma from '../../config/database';
 import { NotFoundError, BadRequestError } from '../../utils/errors';
+import { sanitizePagination } from '../../utils/pagination';
 import { emitToRoom } from '../../socket';
 import { sendNotification } from '../notification/notification.service';
 
@@ -99,9 +100,10 @@ export const markAttendance = async (data: MarkAttendanceInput) => {
   return attendance;
 };
 
-export const getTripAttendance = async (tripId: string) => {
+export const getTripAttendance = async (tripId: string, schoolId?: string) => {
   const trip = await prisma.trip.findUnique({ where: { id: tripId }, include: { bus: true } });
   if (!trip) throw new NotFoundError('Trip not found');
+  if (schoolId && trip.bus.schoolId !== schoolId) throw new NotFoundError('Trip not found');
 
   const attendance = await prisma.attendance.findMany({
     where: { tripId },
@@ -189,7 +191,8 @@ export const getParentAttendance = async (parentId: string, studentId: string) =
 };
 
 export const getAttendanceHistory = async (schoolId: string, page: number = 1, limit: number = 20) => {
-  const skip = (page - 1) * limit;
+  const { page: p, limit: l } = sanitizePagination(page, limit);
+  const skip = (p - 1) * l;
   const where = { trip: { bus: { schoolId } } };
 
   const [attendance, total] = await Promise.all([
@@ -207,10 +210,10 @@ export const getAttendanceHistory = async (schoolId: string, page: number = 1, l
       },
       orderBy: { createdAt: 'desc' },
       skip,
-      take: limit,
+      take: l,
     }),
     prisma.attendance.count({ where }),
   ]);
 
-  return { attendance, total, page, limit };
+  return { attendance, total, page: p, limit: l };
 };

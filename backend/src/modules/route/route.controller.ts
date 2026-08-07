@@ -47,7 +47,7 @@ export const updateRoute = async (req: Request, res: Response, next: NextFunctio
     const { id } = req.params;
     const { name } = req.body;
 
-    const route = await routeService.updateRoute(id, { name });
+    const route = await routeService.updateRoute(id, { name }, req.user?.schoolId);
     sendSuccess(res, 'Route updated successfully', route);
   } catch (error) {
     next(error);
@@ -57,7 +57,7 @@ export const updateRoute = async (req: Request, res: Response, next: NextFunctio
 export const deleteRoute = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { id } = req.params;
-    const result = await routeService.deleteRoute(id);
+    const result = await routeService.deleteRoute(id, req.user?.schoolId);
     sendSuccess(res, result.message);
   } catch (error) {
     next(error);
@@ -73,7 +73,7 @@ export const addStop = async (req: Request, res: Response, next: NextFunction): 
       name,
       latitude,
       longitude,
-    });
+    }, req.user?.schoolId);
 
     sendSuccess(res, 'Stop added successfully', stop, 201);
   } catch (error) {
@@ -91,7 +91,7 @@ export const updateStop = async (req: Request, res: Response, next: NextFunction
       latitude,
       longitude,
       order,
-    });
+    }, req.user?.schoolId);
 
     sendSuccess(res, 'Stop updated successfully', stop);
   } catch (error) {
@@ -102,7 +102,7 @@ export const updateStop = async (req: Request, res: Response, next: NextFunction
 export const deleteStop = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { stopId } = req.params;
-    const result = await routeService.deleteStop(stopId);
+    const result = await routeService.deleteStop(stopId, req.user?.schoolId);
     sendSuccess(res, result.message);
   } catch (error) {
     next(error);

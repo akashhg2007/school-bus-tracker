@@ -27,6 +27,6 @@ class AppConfig {
   static String get fcmSenderId {
     const override = String.fromEnvironment('FCM_SENDER_ID');
     if (override.isNotEmpty) return override;
-    return const String.fromEnvironment('FCM_SENDER_ID', defaultValue: '730117995890');
+    return '';
   }
 }

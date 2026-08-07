@@ -1,5 +1,6 @@
 import prisma from '../../config/database';
 import { NotFoundError, BadRequestError } from '../../utils/errors';
+import { sanitizePagination } from '../../utils/pagination';
 
 interface CreateMaintenanceInput {
   schoolId: string;
@@ -37,7 +38,8 @@ export const createMaintenance = async (data: CreateMaintenanceInput) => {
 };
 
 export const getSchoolMaintenance = async (schoolId: string, page: number = 1, limit: number = 20) => {
-  const skip = (page - 1) * limit;
+  const { page: p, limit: l } = sanitizePagination(page, limit);
+  const skip = (p - 1) * l;
   const where = { bus: { schoolId } };
 
   const [records, total] = await Promise.all([
@@ -48,12 +50,12 @@ export const getSchoolMaintenance = async (schoolId: string, page: number = 1, l
       },
       orderBy: [{ status: 'asc' }, { dueDate: 'asc' }],
       skip,
-      take: limit,
+      take: l,
     }),
     prisma.maintenanceRecord.count({ where }),
   ]);
 
-  return { records, total, page, limit };
+  return { records, total, page: p, limit: l };
 };
 
 export const updateMaintenanceStatus = async (maintenanceId: string, schoolId: string, status: string) => {

@@ -41,7 +41,7 @@ export const markDropoff = async (req: Request, res: Response, next: NextFunctio
 export const getTripAttendance = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { tripId } = req.params;
-    const result = await attendanceService.getTripAttendance(tripId);
+    const result = await attendanceService.getTripAttendance(tripId, req.user?.schoolId);
     sendSuccess(res, 'Trip attendance retrieved successfully', result);
   } catch (error) {
     next(error);

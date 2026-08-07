@@ -12,12 +12,18 @@ const createStudentValidation = [
     .notEmpty()
     .withMessage('Name is required')
     .isString()
-    .withMessage('Name must be a string'),
+    .withMessage('Name must be a string')
+    .isLength({ min: 1, max: 100 })
+    .withMessage('Name must be 1-100 characters')
+    .trim()
+    .escape(),
   body('rollNumber')
     .notEmpty()
     .withMessage('Roll number is required')
     .isString()
-    .withMessage('Roll number must be a string'),
+    .withMessage('Roll number must be a string')
+    .isLength({ min: 1, max: 50 })
+    .withMessage('Roll number must be 1-50 characters'),
   body('parentId')
     .notEmpty()
     .withMessage('Parent ID is required')
@@ -37,7 +43,11 @@ const updateStudentValidation = [
   body('name')
     .optional()
     .isString()
-    .withMessage('Name must be a string'),
+    .withMessage('Name must be a string')
+    .isLength({ min: 1, max: 100 })
+    .withMessage('Name must be 1-100 characters')
+    .trim()
+    .escape(),
   body('rollNumber')
     .optional()
     .isString()

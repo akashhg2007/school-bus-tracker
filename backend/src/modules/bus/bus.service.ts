@@ -1,5 +1,6 @@
 import prisma from '../../config/database';
 import { BadRequestError, NotFoundError, ConflictError } from '../../utils/errors';
+import { sanitizePagination } from '../../utils/pagination';
 
 interface CreateBusInput {
   busNumber: string;
@@ -93,7 +94,8 @@ export const createBus = async (data: CreateBusInput) => {
 };
 
 export const getBusesBySchool = async (schoolId: string, page: number = 1, limit: number = 10) => {
-  const skip = (page - 1) * limit;
+  const { page: p, limit: l } = sanitizePagination(page, limit);
+  const skip = (p - 1) * l;
 
   const [buses, total] = await Promise.all([
     prisma.bus.findMany({
@@ -108,13 +110,13 @@ export const getBusesBySchool = async (schoolId: string, page: number = 1, limit
         _count: { select: { students: true } },
       },
       skip,
-      take: limit,
+      take: l,
       orderBy: { createdAt: 'desc' },
     }),
     prisma.bus.count({ where: { schoolId, isActive: 1 } }),
   ]);
 
-  return { buses, total, page, limit };
+  return { buses, total, page: p, limit: l };
 };
 
 export const getBusById = async (busId: string, schoolId?: string) => {

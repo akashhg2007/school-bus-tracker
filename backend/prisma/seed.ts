@@ -139,12 +139,6 @@ async function main() {
   console.log('Subscription created:', subscription.id);
 
   console.log('Database seeded successfully!');
-  console.log('');
-  console.log('=== DEFAULT CREDENTIALS ===');
-  console.log('Admin:   7777777777 / admin123');
-  console.log('Driver:  5555555555 / admin123');
-  console.log('Parent:  9876543210 / admin123');
-  console.log('===========================');
 }
 
 main()

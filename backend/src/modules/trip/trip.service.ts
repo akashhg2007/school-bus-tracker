@@ -1,5 +1,6 @@
 import prisma from '../../config/database';
 import { NotFoundError, BadRequestError } from '../../utils/errors';
+import { sanitizePagination } from '../../utils/pagination';
 import { emitToRoom } from '../../socket';
 import { sendNotification } from '../notification/notification.service';
 
@@ -98,7 +99,7 @@ export const startTrip = async (data: StartTripInput) => {
   return createdTrip;
 };
 
-export const endTrip = async (tripId: string) => {
+export const endTrip = async (tripId: string, driverId?: string) => {
   const trip = await prisma.trip.findUnique({
     where: { id: tripId },
     include: {
@@ -108,6 +109,10 @@ export const endTrip = async (tripId: string) => {
   });
 
   if (!trip) {
+    throw new NotFoundError('Trip not found');
+  }
+
+  if (driverId && trip.driverId !== driverId) {
     throw new NotFoundError('Trip not found');
   }
 
@@ -185,7 +190,8 @@ export const getActiveTrips = async (schoolId: string) => {
 };
 
 export const getTripHistory = async (schoolId: string, page: number = 1, limit: number = 10) => {
-  const skip = (page - 1) * limit;
+  const { page: p, limit: l } = sanitizePagination(page, limit);
+  const skip = (p - 1) * l;
 
   const [trips, total] = await Promise.all([
     prisma.trip.findMany({
@@ -216,7 +222,7 @@ export const getTripHistory = async (schoolId: string, page: number = 1, limit: 
         },
       },
       skip,
-      take: limit,
+      take: l,
       orderBy: { createdAt: 'desc' },
     }),
     prisma.trip.count({
@@ -226,7 +232,7 @@ export const getTripHistory = async (schoolId: string, page: number = 1, limit: 
     }),
   ]);
 
-  return { trips, total, page, limit };
+  return { trips, total, page: p, limit: l };
 };
 
 export const getTripById = async (tripId: string, schoolId?: string) => {
@@ -265,7 +271,8 @@ export const getTripById = async (tripId: string, schoolId?: string) => {
 };
 
 export const getDriverTrips = async (driverId: string, page: number = 1, limit: number = 10) => {
-  const skip = (page - 1) * limit;
+  const { page: p, limit: l } = sanitizePagination(page, limit);
+  const skip = (p - 1) * l;
 
   const [trips, total] = await Promise.all([
     prisma.trip.findMany({
@@ -287,7 +294,7 @@ export const getDriverTrips = async (driverId: string, page: number = 1, limit: 
         },
       },
       skip,
-      take: limit,
+      take: l,
       orderBy: { createdAt: 'desc' },
     }),
     prisma.trip.count({
@@ -295,5 +302,5 @@ export const getDriverTrips = async (driverId: string, page: number = 1, limit: 
     }),
   ]);
 
-  return { trips, total, page, limit };
+  return { trips, total, page: p, limit: l };
 };

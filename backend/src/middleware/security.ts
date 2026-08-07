@@ -36,10 +36,10 @@ const securityHeaders = helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      styleSrc: ["'self'", "https://fonts.googleapis.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
       imgSrc: ["'self'", "data:", "https://images.unsplash.com"],
-      scriptSrc: ["'self'", "https://cdn.jsdelivr.net"],
+      scriptSrc: ["'self'"],
       connectSrc: ["'self'", process.env.ALLOWED_ORIGINS || process.env.CORS_ORIGIN || "'self'"].filter(Boolean) as string[],
     },
   },
@@ -48,6 +48,7 @@ const securityHeaders = helmet({
   crossOriginResourcePolicy: { policy: 'same-origin' },
   originAgentCluster: false,
   referrerPolicy: { policy: 'no-referrer-when-downgrade' },
+  hsts: { maxAge: 31536000, includeSubDomains: true },
   xDnsPrefetchControl: false,
   xFrameOptions: { action: 'sameorigin' },
   xDownloadOptions: false,
